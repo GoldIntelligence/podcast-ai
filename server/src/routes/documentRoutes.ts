@@ -57,7 +57,7 @@ router.post('/upload', upload.single('document'), (req, res) => {
 });
 
 // 从文件中提取文本内容
-const extractTextFromFile = async (filePath) => {
+const extractTextFromFile = async (filePath: string) => {
   try {
     // 简单实现，仅支持txt文件
     // 实际项目中应该使用pdf.js和mammoth等库支持PDF和DOCX格式
@@ -107,7 +107,7 @@ router.post('/summarize', async (req, res) => {
     
     // 提取对话内容并格式化
     // 这里假设模型返回的内容格式为 "A: 内容" 和 "B: 内容" 交替出现
-    const dialogueLines = responseContent.split('\n').filter(line => line.trim());
+    const dialogueLines = responseContent?.split('\n').filter(line => line.trim()) || [];
     const dialogueContent = [];
     
     for (const line of dialogueLines) {
@@ -156,9 +156,10 @@ router.post('/summarize', async (req, res) => {
       dialogue
     });
     
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('对话稿生成错误:', error);
-    res.status(500).json({ success: false, message: '对话稿生成失败: ' + error.message });
+    const errorMessage = error instanceof Error ? error.message : '未知错误';
+    res.status(500).json({ success: false, message: '对话稿生成失败: ' + errorMessage });
   }
 });
 
