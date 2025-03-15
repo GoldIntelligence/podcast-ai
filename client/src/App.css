@@ -1,0 +1,57 @@
+.site-layout-content {
+  background: #fff;
+  padding: 24px;
+  min-height: 280px;
+}
+
+.ant-layout-header {
+  display: flex;
+  align-items: center;
+}
+
+.logo {
+  height: 32px;
+  margin: 16px;
+}
+
+.ant-layout-sider {
+  background: #fff;
+}
+
+.ant-menu-item a {
+  color: rgba(0, 0, 0, 0.65);
+}
+
+.ant-menu-item-selected a {
+  color: #1890ff;
+}
+
+.upload-area {
+  border: 2px dashed #d9d9d9;
+  border-radius: 4px;
+  padding: 20px;
+  text-align: center;
+  background: #fafafa;
+  cursor: pointer;
+  transition: border-color 0.3s;
+}
+
+.upload-area:hover {
+  border-color: #1890ff;
+}
+
+.editor-container {
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  padding: 10px;
+  min-height: 300px;
+  margin-top: 20px;
+}
+
+.voice-list {
+  margin-top: 20px;
+}
+
+.download-list {
+  margin-top: 20px;
+} 
