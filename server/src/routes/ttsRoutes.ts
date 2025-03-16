@@ -80,6 +80,7 @@ router.post('/generate', async (req: Request, res: Response) => {
     const taskStatusFile = path.join(taskDir, 'status.json');
     fs.writeFileSync(taskStatusFile, JSON.stringify({
       taskId,
+      title: script.title || `播客 ${taskId}`,  // 保存标题
       progress: 0,
       status: 'processing',
       audioUrl: null,
@@ -356,17 +357,23 @@ router.route('/podcasts').get((req, res) => {
             // 只返回已完成的任务
             if (status.status === 'completed' && fs.existsSync(mixedAudioPath)) {
               const stats = fs.statSync(mixedAudioPath);
-              // 确保URL格式正确
+              
+              // 确保URL格式正确 (使用绝对URL)
               let audioUrl = status.audioUrl || `/generated/audio/${name}/mixed_audio.mp3`;
+              
               // 将/generated替换为/api/generated
               if (audioUrl.startsWith('/generated')) {
                 audioUrl = `/api${audioUrl}`;
               }
               
+              // 估算音频时长 (根据文件大小，mp3大约为每分钟1MB)
+              const durationInSeconds = Math.round((stats.size / 1024 / 1024) * 60);
+              
               return {
                 id: name,
-                title: status.title || `播客 ${name}`,
-                duration: status.duration || 0,
+                // 使用status中保存的标题，或从任务ID生成标题
+                title: status.title || `播客 ${name.replace('tts_', '').substring(0, 8)}`,
+                duration: status.duration || durationInSeconds,
                 createdAt: new Date(parseInt(name.replace('tts_', ''))).toISOString(),
                 url: audioUrl,
                 size: stats.size
@@ -380,6 +387,7 @@ router.route('/podcasts').get((req, res) => {
       })
       .filter(Boolean);
     
+    console.log(`找到 ${taskDirs.length} 个播客:`, taskDirs);
     res.status(200).json({
       success: true,
       podcasts: taskDirs

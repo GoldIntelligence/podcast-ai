@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Typography, Card, List, Button, Space, Tag, Input, Empty, message } from 'antd';
-import { DownloadOutlined, DeleteOutlined, SearchOutlined, PlayCircleOutlined } from '@ant-design/icons';
+import { DownloadOutlined, DeleteOutlined, SearchOutlined, PlayCircleOutlined, PauseCircleOutlined } from '@ant-design/icons';
 import { ttsAPI } from '../services/api';
 
 const { Title, Text } = Typography;
@@ -22,6 +22,7 @@ const DownloadPage: React.FC = () => {
   const [searchText, setSearchText] = useState('');
   const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   // 加载播客列表
   useEffect(() => {
@@ -33,9 +34,11 @@ const DownloadPage: React.FC = () => {
     setLoading(true);
     try {
       const response = await ttsAPI.getAllPodcasts();
+      console.log('获取到播客列表:', response.data.podcasts);
       setPodcasts(response.data.podcasts);
       setFilteredPodcasts(response.data.podcasts);
     } catch (error) {
+      console.error('获取播客列表错误:', error);
       message.error('获取播客列表失败');
     } finally {
       setLoading(false);
@@ -57,13 +60,59 @@ const DownloadPage: React.FC = () => {
   };
 
   // 处理下载
-  const handleDownload = (podcast: Podcast) => {
-    const link = document.createElement('a');
-    link.href = podcast.url;
-    link.download = `${podcast.title}.mp3`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleDownload = async (podcast: Podcast) => {
+    try {
+      setDownloadingId(podcast.id);
+      // 使用改进的下载方法
+      console.log('开始下载播客:', podcast);
+      
+      // 获取文件名
+      const now = new Date();
+      const dateStr = now.getFullYear() + 
+        ('0' + (now.getMonth() + 1)).slice(-2) + 
+        ('0' + now.getDate()).slice(-2) + 
+        ('0' + now.getHours()).slice(-2) + 
+        ('0' + now.getMinutes()).slice(-2) + 
+        ('0' + now.getSeconds()).slice(-2);
+      
+      // 清理标题中的特殊字符
+      let safeTitle = podcast.title.replace(/[\\/:*?"<>|]/g, '_');
+      const filename = `${safeTitle}_${dateStr}.mp3`;
+      
+      message.loading('音频文件下载中...', 1);
+      
+      // 使用URL来提取taskId
+      const taskIdMatch = podcast.url.match(/\/audio\/([^/]+)\/mixed_audio\.mp3$/);
+      if (taskIdMatch && taskIdMatch[1]) {
+        const success = await ttsAPI.downloadTTSAudio(podcast.url, filename);
+        if (success) {
+          message.success('播客下载成功');
+        } else {
+          message.error('播客下载失败');
+        }
+      } else {
+        // 备用方案：直接使用URL
+        const link = document.createElement('a');
+        
+        // 确保URL是完整的
+        let url = podcast.url;
+        if (url.startsWith('/api/')) {
+          url = `http://localhost:5001${url.substring(4)}`;
+        }
+        
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        message.success('播客下载成功');
+      }
+    } catch (error) {
+      console.error('下载播客错误:', error);
+      message.error('播客下载失败');
+    } finally {
+      setDownloadingId(null);
+    }
   };
 
   // 处理删除
@@ -101,8 +150,32 @@ const DownloadPage: React.FC = () => {
     }
     
     // 播放新的音频
-    const audio = new Audio(podcast.url);
-    audio.play();
+    let url = podcast.url;
+    // 确保URL是完整的
+    if (url.startsWith('/api/')) {
+      url = `http://localhost:5001${url.substring(4)}`;
+      console.log('处理后的音频URL:', url);
+    }
+    
+    console.log('开始播放音频:', url);
+    const audio = new Audio(url);
+    
+    // 添加错误处理
+    audio.onerror = (e) => {
+      console.error('音频播放错误:', e);
+      message.error('无法播放音频');
+      setCurrentAudio(null);
+      setPlayingId(null);
+    };
+    
+    // 尝试播放
+    audio.play().then(() => {
+      console.log('音频播放成功');
+    }).catch(err => {
+      console.error('音频播放失败:', err);
+      message.error('播放失败: ' + (err.message || '未知错误'));
+    });
+    
     setCurrentAudio(audio);
     setPlayingId(podcast.id);
     
@@ -116,7 +189,7 @@ const DownloadPage: React.FC = () => {
   // 格式化时间
   const formatDuration = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
+    const remainingSeconds = Math.floor(seconds % 60);
     return `${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
   };
 
@@ -156,7 +229,7 @@ const DownloadPage: React.FC = () => {
                 <List.Item
                   actions={[
                     <Button 
-                      icon={playingId === podcast.id ? <PlayCircleOutlined style={{ color: '#1890ff' }} /> : <PlayCircleOutlined />} 
+                      icon={playingId === podcast.id ? <PauseCircleOutlined style={{ color: '#1890ff' }} /> : <PlayCircleOutlined />} 
                       type="text"
                       onClick={() => handlePlay(podcast)}
                     >
@@ -165,6 +238,7 @@ const DownloadPage: React.FC = () => {
                     <Button 
                       icon={<DownloadOutlined />} 
                       type="text"
+                      loading={downloadingId === podcast.id}
                       onClick={() => handleDownload(podcast)}
                     >
                       下载
