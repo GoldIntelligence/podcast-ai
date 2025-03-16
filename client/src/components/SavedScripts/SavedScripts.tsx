@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { List, Card, Button, Modal, Typography, Space, message, Spin } from 'antd';
-import { DeleteOutlined, EditOutlined, AudioOutlined, EyeOutlined } from '@ant-design/icons';
-import axios from 'axios';
+import { DeleteOutlined, EditOutlined, AudioOutlined, EyeOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
+import { dialogueAPI } from '../../services/api';
 
 const { Title, Text } = Typography;
 
@@ -30,13 +30,54 @@ const SavedScripts: React.FC = () => {
   const loadDialogues = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('/api/dialogues');
-      if (response.data && Array.isArray(response.data)) {
+      // 使用封装的API服务
+      const response = await dialogueAPI.getAllDialogues();
+      console.log('获取到的对话稿数据:', response.data);
+      
+      // 处理API返回的数据结构
+      if (response.data && response.data.success && Array.isArray(response.data.dialogues)) {
+        setDialogues(response.data.dialogues);
+      } else if (response.data && Array.isArray(response.data)) {
+        // 兼容可能的不同数据格式
         setDialogues(response.data);
+      } else {
+        console.warn('对话稿数据格式不符合预期:', response.data);
+        setDialogues([]);
+      }
+      
+      // 如果数据库没有数据，尝试从localStorage获取
+      if ((response.data.dialogues && response.data.dialogues.length === 0) || 
+          (Array.isArray(response.data) && response.data.length === 0)) {
+        try {
+          const savedDialoguesStr = localStorage.getItem('saved_dialogues');
+          if (savedDialoguesStr) {
+            const localDialogues = JSON.parse(savedDialoguesStr);
+            if (Array.isArray(localDialogues) && localDialogues.length > 0) {
+              setDialogues(localDialogues);
+              message.info('从本地存储加载了保存的对话稿');
+            }
+          }
+        } catch (e) {
+          console.error('从localStorage加载失败:', e);
+        }
       }
     } catch (error) {
       console.error('获取对话稿失败:', error);
-      message.error('无法加载保存的对话稿');
+      message.error('无法从服务器加载保存的对话稿');
+      
+      // 尝试从localStorage获取
+      try {
+        const savedDialoguesStr = localStorage.getItem('saved_dialogues');
+        if (savedDialoguesStr) {
+          const localDialogues = JSON.parse(savedDialoguesStr);
+          if (Array.isArray(localDialogues) && localDialogues.length > 0) {
+            setDialogues(localDialogues);
+            message.info('从本地存储加载了保存的对话稿');
+          }
+        }
+      } catch (e) {
+        console.error('从localStorage加载失败:', e);
+      }
     } finally {
       setLoading(false);
     }
@@ -60,10 +101,22 @@ const SavedScripts: React.FC = () => {
   // 删除对话稿
   const handleDeleteDialogue = async (id: number) => {
     try {
-      await axios.delete(`/api/dialogues/${id}`);
+      await dialogueAPI.deleteDialogue(id);
       message.success('对话稿已删除');
       // 重新加载对话稿列表
       loadDialogues();
+      
+      // 同时从localStorage删除
+      try {
+        const savedDialoguesStr = localStorage.getItem('saved_dialogues');
+        if (savedDialoguesStr) {
+          let localDialogues = JSON.parse(savedDialoguesStr);
+          localDialogues = localDialogues.filter((d: any) => d.id !== id);
+          localStorage.setItem('saved_dialogues', JSON.stringify(localDialogues));
+        }
+      } catch (e) {
+        console.error('从localStorage删除失败:', e);
+      }
     } catch (error) {
       console.error('删除对话稿失败:', error);
       message.error('删除对话稿时出错');
@@ -78,13 +131,27 @@ const SavedScripts: React.FC = () => {
 
   // 格式化日期
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleString('zh-CN');
+    if (!dateString) return '未知时间';
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleString('zh-CN');
+    } catch (e) {
+      return dateString;
+    }
   };
 
   return (
     <div style={{ padding: '20px' }}>
-      <Title level={2}>已保存的对话稿</Title>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <Title level={2}>已保存的对话稿</Title>
+        <Button 
+          icon={<ReloadOutlined />} 
+          onClick={loadDialogues} 
+          loading={loading}
+        >
+          刷新
+        </Button>
+      </div>
       <Text type="secondary" style={{ marginBottom: '20px', display: 'block' }}>
         查看、编辑或删除您保存的对话稿，也可以将对话稿发送到TTS进行语音合成
       </Text>
@@ -106,6 +173,7 @@ const SavedScripts: React.FC = () => {
             xxl: 4,
           }}
           dataSource={dialogues}
+          locale={{ emptyText: '没有找到保存的对话稿' }}
           renderItem={(dialogue) => (
             <List.Item>
               <Card

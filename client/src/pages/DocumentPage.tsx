@@ -3,6 +3,7 @@ import { Upload, Button, Typography, message, Spin, Card, Select, Space, Modal, 
 import { InboxOutlined, FileTextOutlined, SaveOutlined, LoadingOutlined, FolderOpenOutlined } from '@ant-design/icons';
 import { documentAPI } from '../services/api';
 import ScriptEditor from '../components/Document/ScriptEditor';
+import { dialogueAPI } from '../services/api';
 
 const { Dragger } = Upload;
 const { Title, Text, Paragraph } = Typography;
@@ -39,11 +40,66 @@ const DocumentPage: React.FC = () => {
         const dialogues = JSON.parse(savedDialoguesStr);
         setSavedDialogues(dialogues);
         console.log('从本地存储加载了', dialogues.length, '个对话稿');
+        
+        // 尝试将本地存储的对话稿同步到服务器
+        syncLocalDialoguesToServer(dialogues);
       }
     } catch (e) {
       console.error('从localStorage加载对话稿失败:', e);
     }
   }, []);
+  
+  // 将本地对话稿同步到服务器
+  const syncLocalDialoguesToServer = async (localDialogues: Dialogue[]) => {
+    if (!localDialogues || localDialogues.length === 0) return;
+    
+    try {
+      console.log('正在同步本地对话稿到服务器...');
+      // 获取服务器上的对话稿
+      const response = await dialogueAPI.getAllDialogues();
+      let serverDialogues: any[] = [];
+      
+      if (response.data && response.data.success && Array.isArray(response.data.dialogues)) {
+        serverDialogues = response.data.dialogues;
+      } else if (response.data && Array.isArray(response.data)) {
+        serverDialogues = response.data;
+      }
+      
+      // 找出服务器上不存在的本地对话稿
+      const serverIds = new Set(serverDialogues.map((d: any) => d.id));
+      const dialoguesToSync = localDialogues.filter(d => !serverIds.has(d.id));
+      
+      if (dialoguesToSync.length === 0) {
+        console.log('所有本地对话稿已同步到服务器');
+        return;
+      }
+      
+      console.log(`准备同步 ${dialoguesToSync.length} 个本地对话稿到服务器`);
+      
+      // 将本地对话稿保存到服务器
+      for (const dialogue of dialoguesToSync) {
+        const syncData = {
+          title: dialogue.title,
+          speakers: dialogue.speakers,
+          content: dialogue.content.map(item => ({
+            speaker: item.speaker,
+            text: item.text
+          }))
+        };
+        
+        try {
+          await dialogueAPI.saveDialogue(syncData);
+          console.log(`对话稿 "${dialogue.title}" 已同步到服务器`);
+        } catch (error) {
+          console.error(`同步对话稿 "${dialogue.title}" 失败:`, error);
+        }
+      }
+      
+      console.log('本地对话稿同步完成');
+    } catch (error) {
+      console.error('同步本地对话稿到服务器失败:', error);
+    }
+  };
 
   // 处理文件上传
   const handleUpload = async (options: any) => {
@@ -137,6 +193,26 @@ const DocumentPage: React.FC = () => {
     setDialogue(selectedDialogue);
     setLoadModalVisible(false);
     message.success(`已加载对话稿: ${selectedDialogue.title}`);
+    
+    // 如果从本地加载了对话稿，尝试同步到服务器
+    if (selectedDialogue && selectedDialogue.id && !selectedDialogue.id.toString().startsWith('server_')) {
+      const syncData = {
+        title: selectedDialogue.title,
+        speakers: selectedDialogue.speakers,
+        content: selectedDialogue.content.map(item => ({
+          speaker: item.speaker,
+          text: item.text
+        }))
+      };
+      
+      dialogueAPI.saveDialogue(syncData)
+        .then(response => {
+          console.log('已加载的对话稿同步到服务器成功:', response.data);
+        })
+        .catch(error => {
+          console.error('同步已加载对话稿到服务器失败:', error);
+        });
+    }
   };
 
   // 格式化日期时间

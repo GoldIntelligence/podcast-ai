@@ -28,7 +28,12 @@ initDatabase()
   });
 
 // 中间件
-app.use(cors());
+app.use(cors({
+  origin: ['http://localhost:3000', '*'],  // 允许来自前端的请求
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true  // 允许携带凭证
+}));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 

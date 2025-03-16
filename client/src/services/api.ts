@@ -12,8 +12,8 @@ const api = axios.create({
   },
   // 超时设置
   timeout: 10000,
-  // 跨域请求是否携带凭证
-  withCredentials: true
+  // 禁用凭证，避免CORS问题
+  withCredentials: false
 });
 
 // 拦截器：打印请求信息
