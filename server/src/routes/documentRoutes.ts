@@ -93,62 +93,99 @@ router.post('/summarize', async (req, res) => {
       messages: [
         {
           role: "system",
-          content: "你是著名央视财经频道主编，你擅长中美财经信息总结提炼。在用户提交财经资讯时，你快速总结提炼有价值信息，同时，生成A（模拟郎咸平） B（模拟李大霄）两个主持人的播客对话稿件"
+          content: `你是著名央视财经频道主编，你擅长中美财经信息总结提炼。在用户提交财经资讯时，你快速总结提炼有价值信息。
+请以JSON格式返回以下内容：
+1. title: 为对话内容生成一个简洁的标题
+2. content: 数组格式，包含多个对象，每个对象有两个字段：
+   - speaker: 主持人姓名，交替使用"郎咸平"和"李大霄"
+   - text: 对应的对话内容
+请确保生成的JSON格式正确且易于解析。对话内容应该有条理、专业且富有洞察力。`
         },
         {
           role: "user", 
           content: fileContent
         }
-      ]
+      ],
+      response_format: { type: "json_object" }
     });
     
     // 解析响应，生成对话稿
     const responseContent = completion.choices[0].message.content;
     
-    // 提取对话内容并格式化
-    // 这里假设模型返回的内容格式为 "A: 内容" 和 "B: 内容" 交替出现
-    const dialogueLines = responseContent?.split('\n').filter(line => line.trim()) || [];
-    const dialogueContent = [];
-    
-    for (const line of dialogueLines) {
-      if (line.startsWith('A:')) {
+    let dialogue;
+    try {
+      // 尝试解析JSON响应
+      const parsedResponse = JSON.parse(responseContent || '{}');
+      
+      // 获取标题
+      let title = parsedResponse.title || '财经对话';
+      
+      // 生成时间戳
+      const currentTime = new Date();
+      const formattedTime = `${currentTime.getFullYear()}-${currentTime.getMonth() + 1}-${currentTime.getDate()} ${currentTime.getHours()}:${currentTime.getMinutes()}`;
+      
+      // 构建最终的对话结构
+      dialogue = {
+        title: `${title} ${formattedTime}`,
+        speakers: ['郎咸平', '李大霄'],
+        content: parsedResponse.content || [],
+        createdAt: new Date().toISOString()
+      };
+      
+      // 如果内容为空，添加默认内容
+      if (!parsedResponse.content || parsedResponse.content.length === 0) {
+        dialogue.content = [{
+          speaker: '郎咸平',
+          text: responseContent || '无法生成有效内容'
+        }];
+      }
+    } catch (error) {
+      console.error('解析JSON响应失败:', error);
+      
+      // 解析失败时，使用旧方法处理
+      const dialogueLines = responseContent?.split('\n').filter(line => line.trim()) || [];
+      const dialogueContent = [];
+      
+      for (const line of dialogueLines) {
+        if (line.startsWith('A:')) {
+          dialogueContent.push({
+            speaker: '郎咸平',
+            text: line.substring(2).trim()
+          });
+        } else if (line.startsWith('B:')) {
+          dialogueContent.push({
+            speaker: '李大霄',
+            text: line.substring(2).trim()
+          });
+        }
+      }
+      
+      // 如果没有成功提取对话内容，使用完整的响应内容
+      if (dialogueContent.length === 0) {
         dialogueContent.push({
           speaker: '郎咸平',
-          text: line.substring(2).trim()
-        });
-      } else if (line.startsWith('B:')) {
-        dialogueContent.push({
-          speaker: '李大霄',
-          text: line.substring(2).trim()
+          text: responseContent || '无法生成有效内容'
         });
       }
+      
+      // 生成标题和时间
+      const currentTime = new Date();
+      const formattedTime = `${currentTime.getFullYear()}-${currentTime.getMonth() + 1}-${currentTime.getDate()} ${currentTime.getHours()}:${currentTime.getMinutes()}`;
+      
+      // 从内容中提取可能的标题
+      let title = '财经对话';
+      const firstLine = dialogueLines[0];
+      if (firstLine && !firstLine.startsWith('A:') && !firstLine.startsWith('B:')) {
+        title = firstLine;
+      }
+      
+      dialogue = {
+        title: `${title} ${formattedTime}`,
+        speakers: ['郎咸平', '李大霄'],
+        content: dialogueContent,
+        createdAt: new Date().toISOString()
+      };
     }
-    
-    // 如果没有成功提取对话内容，使用完整的响应内容
-    if (dialogueContent.length === 0) {
-      dialogueContent.push({
-        speaker: '郎咸平',
-        text: responseContent
-      });
-    }
-    
-    // 生成标题和时间
-    const currentTime = new Date();
-    const formattedTime = `${currentTime.getFullYear()}-${currentTime.getMonth() + 1}-${currentTime.getDate()} ${currentTime.getHours()}:${currentTime.getMinutes()}`;
-    
-    // 从内容中提取可能的标题
-    let title = '财经对话';
-    const firstLine = dialogueLines[0];
-    if (firstLine && !firstLine.startsWith('A:') && !firstLine.startsWith('B:')) {
-      title = firstLine;
-    }
-    
-    const dialogue = {
-      title: `${title} ${formattedTime}`,
-      speakers: ['郎咸平', '李大霄'],
-      content: dialogueContent,
-      createdAt: new Date().toISOString()
-    };
     
     res.status(200).json({
       success: true,

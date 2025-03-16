@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
-import { Upload, Button, Typography, message, Spin, Card } from 'antd';
-import { InboxOutlined, FileTextOutlined } from '@ant-design/icons';
+import React, { useState, useEffect } from 'react';
+import { Upload, Button, Typography, message, Spin, Card, Select, Space, Modal, List } from 'antd';
+import { InboxOutlined, FileTextOutlined, SaveOutlined, LoadingOutlined, FolderOpenOutlined } from '@ant-design/icons';
 import { documentAPI } from '../services/api';
 import ScriptEditor from '../components/Document/ScriptEditor';
 
 const { Dragger } = Upload;
-const { Title, Text } = Typography;
+const { Title, Text, Paragraph } = Typography;
+const { Option } = Select;
 
 interface DialogueContent {
   speaker: string;
@@ -13,9 +14,12 @@ interface DialogueContent {
 }
 
 interface Dialogue {
+  id?: number;
   title: string;
   speakers: string[];
   content: DialogueContent[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 const DocumentPage: React.FC = () => {
@@ -24,6 +28,22 @@ const DocumentPage: React.FC = () => {
   const [generating, setGenerating] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<any>(null);
   const [dialogue, setDialogue] = useState<Dialogue | null>(null);
+  const [savedDialogues, setSavedDialogues] = useState<Dialogue[]>([]);
+  const [loadModalVisible, setLoadModalVisible] = useState(false);
+
+  // 从localStorage加载保存的对话稿
+  useEffect(() => {
+    try {
+      const savedDialoguesStr = localStorage.getItem('saved_dialogues');
+      if (savedDialoguesStr) {
+        const dialogues = JSON.parse(savedDialoguesStr);
+        setSavedDialogues(dialogues);
+        console.log('从本地存储加载了', dialogues.length, '个对话稿');
+      }
+    } catch (e) {
+      console.error('从localStorage加载对话稿失败:', e);
+    }
+  }, []);
 
   // 处理文件上传
   const handleUpload = async (options: any) => {
@@ -76,6 +96,58 @@ const DocumentPage: React.FC = () => {
   // 处理对话稿编辑
   const handleScriptEdit = (newDialogue: Dialogue) => {
     setDialogue(newDialogue);
+    
+    // 更新本地存储的对话稿列表
+    if (newDialogue.id) {
+      try {
+        const savedDialoguesStr = localStorage.getItem('saved_dialogues');
+        let dialogues = savedDialoguesStr ? JSON.parse(savedDialoguesStr) : [];
+        
+        // 检查是否需要更新savedDialogues状态
+        const existingIndex = savedDialogues.findIndex(d => d.id === newDialogue.id);
+        if (existingIndex >= 0) {
+          const updatedDialogues = [...savedDialogues];
+          updatedDialogues[existingIndex] = newDialogue;
+          setSavedDialogues(updatedDialogues);
+        }
+      } catch (e) {
+        console.error('更新本地对话稿状态失败:', e);
+      }
+    }
+  };
+  
+  // 显示加载对话稿模态框
+  const showLoadDialogueModal = () => {
+    // 重新从localStorage加载以确保最新
+    try {
+      const savedDialoguesStr = localStorage.getItem('saved_dialogues');
+      if (savedDialoguesStr) {
+        const dialogues = JSON.parse(savedDialoguesStr);
+        setSavedDialogues(dialogues);
+      }
+    } catch (e) {
+      console.error('从localStorage刷新对话稿失败:', e);
+    }
+    
+    setLoadModalVisible(true);
+  };
+  
+  // 加载选中的对话稿
+  const handleLoadDialogue = (selectedDialogue: Dialogue) => {
+    setDialogue(selectedDialogue);
+    setLoadModalVisible(false);
+    message.success(`已加载对话稿: ${selectedDialogue.title}`);
+  };
+
+  // 格式化日期时间
+  const formatDateTime = (dateStr?: string) => {
+    if (!dateStr) return '未知时间';
+    try {
+      const date = new Date(dateStr);
+      return `${date.getFullYear()}-${date.getMonth()+1}-${date.getDate()} ${date.getHours()}:${date.getMinutes()}`;
+    } catch (e) {
+      return dateStr;
+    }
   };
 
   return (
@@ -103,15 +175,25 @@ const DocumentPage: React.FC = () => {
         </Dragger>
         
         <div style={{ marginTop: 20, textAlign: 'center' }}>
-          <Button 
-            type="primary" 
-            icon={<FileTextOutlined />} 
-            loading={generating}
-            onClick={handleGenerateScript}
-            disabled={!uploadedFile}
-          >
-            {generating ? '生成中...' : '生成对话稿'}
-          </Button>
+          <Space>
+            <Button 
+              type="primary" 
+              icon={<FileTextOutlined />} 
+              loading={generating}
+              onClick={handleGenerateScript}
+              disabled={!uploadedFile}
+            >
+              {generating ? '生成中...' : '生成对话稿'}
+            </Button>
+            
+            <Button
+              icon={<FolderOpenOutlined />}
+              onClick={showLoadDialogueModal}
+              disabled={savedDialogues.length === 0}
+            >
+              加载已保存稿件
+            </Button>
+          </Space>
         </div>
       </Card>
       
@@ -126,6 +208,41 @@ const DocumentPage: React.FC = () => {
           <ScriptEditor dialogue={dialogue} onDialogueChange={handleScriptEdit} />
         </Card>
       )}
+      
+      {/* 加载对话稿模态框 */}
+      <Modal
+        title="加载已保存的对话稿"
+        open={loadModalVisible}
+        onCancel={() => setLoadModalVisible(false)}
+        footer={null}
+      >
+        <List
+          dataSource={savedDialogues}
+          renderItem={(item: Dialogue) => (
+            <List.Item
+              actions={[
+                <Button 
+                  type="primary"
+                  size="small"
+                  onClick={() => handleLoadDialogue(item)}
+                >
+                  加载
+                </Button>
+              ]}
+            >
+              <List.Item.Meta
+                title={item.title}
+                description={
+                  <div>
+                    <p>更新时间: {formatDateTime(item.updatedAt)}</p>
+                    <p>段落数: {item.content.length}</p>
+                  </div>
+                }
+              />
+            </List.Item>
+          )}
+        />
+      </Modal>
     </div>
   );
 };

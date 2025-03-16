@@ -23,8 +23,11 @@ export const initDatabase = async () => {
     console.log('数据库连接成功');
     await sequelize.sync({ alter: true });
     console.log('数据表同步成功');
+    return true;
   } catch (error) {
     console.error('数据库连接失败:', error);
+    // 将错误抛出以便调用者处理
+    throw error;
   }
 };
 

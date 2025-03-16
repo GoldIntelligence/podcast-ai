@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Form, Input, Button, Select, List, Space, Typography, message } from 'antd';
 import { PlusOutlined, DeleteOutlined, EditOutlined, SaveOutlined, CloudUploadOutlined } from '@ant-design/icons';
-import axios from 'axios';
+import { dialogueAPI } from '../../services/api';
 
 const { TextArea } = Input;
 const { Option } = Select;
@@ -45,7 +45,7 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ dialogue, onDialogueChange 
     // 初始化带有显示文本和打字标志的对话内容
     const enhancedContent = dialogue.content.map(item => ({
       ...item,
-      displayed: '',
+      displayed: item.displayed || item.text, // 如果已经有displayed属性，保留它
       isTyping: false
     }));
     
@@ -56,8 +56,10 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ dialogue, onDialogueChange 
     
     setCurrentDialogue(enhancedDialogue);
     
-    // 开始打字效果
-    startTypingEffect(enhancedDialogue);
+    // 如果是新的对话内容（没有id，意味着是刚生成的），才开始打字效果
+    if (!dialogue.id) {
+      startTypingEffect(enhancedDialogue);
+    }
   }, [dialogue]);
 
   // 打字机效果
@@ -152,7 +154,7 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ dialogue, onDialogueChange 
     if (editingIndex !== null && currentItem.speaker && currentItem.text) {
       const newItem = {
         ...currentItem,
-        displayed: currentItem.text,
+        displayed: currentItem.text, // 编辑后立即显示完整文本，不使用打字机效果
         isTyping: false
       };
       
@@ -189,6 +191,42 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ dialogue, onDialogueChange 
     onDialogueChange(newDialogue);
   };
   
+  // 保存到本地存储的函数
+  const saveToLocalStorage = (data: Dialogue) => {
+    try {
+      // 生成唯一ID（如果没有）
+      const dialogueToSave = {
+        ...data,
+        id: data.id || Date.now(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      // 获取现有的对话稿列表
+      const savedDialoguesStr = localStorage.getItem('saved_dialogues');
+      let savedDialogues = savedDialoguesStr ? JSON.parse(savedDialoguesStr) : [];
+      
+      // 检查是否已存在该ID的对话稿
+      const existingIndex = savedDialogues.findIndex((d: any) => d.id === dialogueToSave.id);
+      
+      if (existingIndex >= 0) {
+        // 更新现有对话稿
+        savedDialogues[existingIndex] = dialogueToSave;
+      } else {
+        // 添加新对话稿
+        savedDialogues.push(dialogueToSave);
+      }
+      
+      // 保存到localStorage
+      localStorage.setItem('saved_dialogues', JSON.stringify(savedDialogues));
+      console.log('对话稿已保存到本地存储', dialogueToSave.id);
+      
+      return dialogueToSave;
+    } catch (e) {
+      console.error('保存到本地存储失败:', e);
+      return data;
+    }
+  };
+  
   // 保存对话稿到数据库
   const handleSaveDialogue = async () => {
     try {
@@ -205,24 +243,63 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ dialogue, onDialogueChange 
         }))
       };
       
-      // 发送到后端API
-      const response = await axios.post('/api/dialogues', dialogueToSave);
+      console.log('准备保存的对话稿数据:', dialogueToSave);
       
-      if (response.data.success) {
-        message.success('对话稿保存成功！');
-        // 更新当前对话的ID
-        const savedDialogue = {
-          ...currentDialogue,
-          id: response.data.dialogue.id
-        };
-        setCurrentDialogue(savedDialogue);
-        onDialogueChange(savedDialogue);
-      } else {
-        message.error('保存失败: ' + response.data.message);
+      // 无论API成功与否，先保存到本地
+      const localSavedDialogue = saveToLocalStorage({
+        ...dialogueToSave,
+        id: currentDialogue.id
+      });
+      
+      // 将ID更新到当前对话中
+      const savedDialogue = {
+        ...currentDialogue,
+        id: localSavedDialogue.id
+      };
+      setCurrentDialogue(savedDialogue);
+      onDialogueChange(savedDialogue);
+      
+      message.success('对话稿已保存到本地！');
+      
+      // 尝试保存到API服务器
+      try {
+        // 使用API服务保存
+        let response;
+        if (currentDialogue.id) {
+          console.log(`正在更新对话稿 ID: ${currentDialogue.id}`);
+          response = await dialogueAPI.updateDialogue(currentDialogue.id, dialogueToSave);
+        } else {
+          console.log('正在创建新对话稿');
+          response = await dialogueAPI.saveDialogue(dialogueToSave);
+        }
+        
+        console.log('服务器响应:', response.data);
+        
+        if (response.data.success) {
+          message.success('对话稿已同步到服务器！');
+          console.log('对话稿已成功保存到服务器，ID:', response.data.dialogue.id);
+        } else {
+          console.error('服务器返回失败:', response.data.message);
+        }
+      } catch (apiError: any) {
+        console.error('API保存失败，但已保存到本地:', apiError);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('保存对话稿错误:', error);
-      message.error('对话稿保存失败，请重试');
+      // 显示更详细的错误信息
+      if (error.response) {
+        // 服务器返回了错误状态码
+        console.error('服务器响应错误:', error.response.data);
+        message.error(`保存失败 (${error.response.status}): ${error.response.data.message || '未知错误'}`);
+      } else if (error.request) {
+        // 请求发送了但没有收到响应
+        console.error('没有收到服务器响应:', error.request);
+        message.error('服务器没有响应，请检查网络连接');
+      } else {
+        // 设置请求时发生错误
+        console.error('请求错误:', error.message);
+        message.error('请求错误: ' + error.message);
+      }
     } finally {
       setIsSaving(false);
     }
