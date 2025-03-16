@@ -50,6 +50,9 @@ try {
 // 静态文件目录
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 app.use('/generated', express.static(path.join(__dirname, '../generated')));
+// 添加通过API路径访问静态文件的路由
+app.use('/api/generated', express.static(path.join(__dirname, '../generated')));
+app.use('/api/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // 路由
 app.use('/api/documents', documentRoutes);

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Typography, Card, Select, Slider, Button, message, Progress, Space, Spin } from 'antd';
-import { CustomerServiceOutlined, PlayCircleOutlined, PauseCircleOutlined, FileTextOutlined } from '@ant-design/icons';
+import { CustomerServiceOutlined, PlayCircleOutlined, PauseCircleOutlined, FileTextOutlined, DownloadOutlined } from '@ant-design/icons';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { voiceAPI, ttsAPI } from '../services/api';
 import axios from 'axios';
@@ -31,6 +31,7 @@ interface TTSTask {
   taskId: string;
   progress: number;
   status: string;
+  audioUrl?: string;
 }
 
 const TTSPage: React.FC = () => {
@@ -55,13 +56,42 @@ const TTSPage: React.FC = () => {
     fetchVoices();
     fetchSavedDialogues();
     
-    // 检查URL中是否包含dialogueId参数
+    // 检查URL中是否包含参数
     const params = new URLSearchParams(location.search);
     const dialogueId = params.get('dialogueId');
+    const taskId = params.get('taskId');
     
     if (dialogueId) {
       // 加载指定ID的对话稿
       loadSavedDialogue(parseInt(dialogueId));
+    } else if (taskId) {
+      // 如果有任务ID，直接显示任务进度
+      setTtsTasks([{
+        taskId,
+        progress: 0,
+        status: 'processing'
+      }]);
+      
+      // 立即获取一次进度
+      (async () => {
+        try {
+          const response = await ttsAPI.getTTSProgress(taskId);
+          if (response.data && response.data.success) {
+            setTtsTasks([{
+              taskId,
+              progress: response.data.progress,
+              status: response.data.status,
+              audioUrl: response.data.audioUrl
+            }]);
+            
+            if (response.data.status === 'completed' && response.data.audioUrl) {
+              setAudioPreview(new Audio(response.data.audioUrl));
+            }
+          }
+        } catch (error) {
+          console.error('获取任务进度失败', error);
+        }
+      })();
     } else {
       // 从本地存储或全局状态加载对话稿
       const savedDialogue = localStorage.getItem('currentDialogue');
@@ -150,6 +180,7 @@ const TTSPage: React.FC = () => {
         const response = await ttsAPI.getTTSProgress(updatedTasks[i].taskId);
         updatedTasks[i].progress = response.data.progress;
         updatedTasks[i].status = response.data.status;
+        updatedTasks[i].audioUrl = response.data.audioUrl;
         
         // 播放预览
         if (updatedTasks[i].status === 'completed' && response.data.audioUrl) {
@@ -211,10 +242,126 @@ const TTSPage: React.FC = () => {
     setIsPlaying(!isPlaying);
   };
 
+  // 下载音频文件
+  const downloadAudio = (url: string, filename: string) => {
+    console.log('开始下载音频 (旧方法)', url);
+    // 创建一个XHR请求来获取音频文件的blob
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', url, true);
+    xhr.responseType = 'blob';
+    
+    xhr.onload = function() {
+      if (this.status === 200) {
+        // 创建一个blob URL
+        const blob = new Blob([this.response], { type: 'audio/mpeg' });
+        const blobUrl = window.URL.createObjectURL(blob);
+        
+        // 创建一个下载链接并点击
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        
+        // 清理
+        setTimeout(() => {
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(blobUrl);
+        }, 100);
+        
+        message.success('音频下载成功');
+      } else {
+        message.error('下载失败：' + this.status);
+        console.error('下载失败', this.status, this.statusText);
+      }
+    };
+    
+    xhr.onerror = function() {
+      message.error('下载失败，可能是网络问题');
+      console.error('下载失败', this);
+    };
+    
+    xhr.send();
+  };
+
   return (
     <div>
       <Title level={4}>播客合成</Title>
       <Text>选择音色，合成高质量播客</Text>
+      
+      {/* 显示TTS任务进度 */}
+      {ttsTasks.length > 0 && (
+        <Card title="合成进度" style={{ marginTop: 20 }}>
+          {ttsTasks.map((task) => (
+            <div key={task.taskId} style={{ marginBottom: 16 }}>
+              <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+                <Text>任务ID: {task.taskId}</Text>
+                <Text>状态: {task.status === 'completed' ? '已完成' : task.status === 'processing' ? '处理中' : task.status === 'merging' ? '合并中' : task.status}</Text>
+              </Space>
+              <Progress 
+                percent={task.progress} 
+                status={task.status === 'error' ? 'exception' : task.status === 'completed' ? 'success' : 'active'} 
+              />
+              
+              {task.status === 'completed' && audioPreview && (
+                <div style={{ marginTop: 10, textAlign: 'center' }}>
+                  <Space>
+                    <Button 
+                      type="primary" 
+                      icon={isPlaying ? <PauseCircleOutlined /> : <PlayCircleOutlined />} 
+                      onClick={togglePlay}
+                    >
+                      {isPlaying ? '暂停' : '播放'}
+                    </Button>
+                    <Button 
+                      icon={<DownloadOutlined />}
+                      onClick={() => {
+                        if (task.audioUrl) {
+                          console.log('尝试下载音频:', task.audioUrl);
+                          
+                          // 构建更有意义的文件名: 标题+日期时间.mp3
+                          const now = new Date();
+                          const dateStr = now.getFullYear() + 
+                            ('0' + (now.getMonth() + 1)).slice(-2) + 
+                            ('0' + now.getDate()).slice(-2) + 
+                            ('0' + now.getHours()).slice(-2) + 
+                            ('0' + now.getMinutes()).slice(-2) + 
+                            ('0' + now.getSeconds()).slice(-2);
+                          
+                          // 使用对话稿标题(如果有)
+                          let title = dialogue?.title || '播客';
+                          // 删除标题中的特殊字符
+                          title = title.replace(/[\\/:*?"<>|]/g, '_');
+                          
+                          const filename = `${title}_${dateStr}.mp3`;
+                          
+                          message.loading('音频文件下载中...', 1);
+                          ttsAPI.downloadTTSAudio(task.audioUrl, filename)
+                            .then(success => {
+                              if (success) {
+                                message.success('音频下载成功');
+                              } else {
+                                message.error('音频下载失败');
+                              }
+                            })
+                            .catch(err => {
+                              console.error('下载出错:', err);
+                              message.error('下载过程中出错');
+                            });
+                        } else {
+                          message.error('音频URL不存在');
+                        }
+                      }}
+                    >
+                      下载音频
+                    </Button>
+                  </Space>
+                </div>
+              )}
+            </div>
+          ))}
+        </Card>
+      )}
       
       {loadingSavedDialogue ? (
         <Card style={{ marginTop: 20, textAlign: 'center' }}>
@@ -324,30 +471,6 @@ const TTSPage: React.FC = () => {
                 <Paragraph key={index}>
                   <Text strong>{item.speaker}:</Text> {item.text}
                 </Paragraph>
-              ))}
-            </Card>
-          )}
-          
-          {ttsTasks.length > 0 && (
-            <Card title="合成任务" style={{ marginTop: 20 }}>
-              {ttsTasks.map((task, index) => (
-                <div key={task.taskId} style={{ marginBottom: 16 }}>
-                  <Space direction="vertical" style={{ width: '100%' }}>
-                    <Text>任务 #{index + 1}</Text>
-                    <Progress percent={task.progress} status={task.status === 'completed' ? 'success' : 'active'} />
-                    <Space>
-                      <Text>{task.status === 'completed' ? '合成完成' : `合成中 ${task.progress}%`}</Text>
-                      {task.status === 'completed' && (
-                        <Button
-                          icon={isPlaying ? <PauseCircleOutlined /> : <PlayCircleOutlined />}
-                          onClick={togglePlay}
-                        >
-                          {isPlaying ? '暂停' : '预览'}
-                        </Button>
-                      )}
-                    </Space>
-                  </Space>
-                </div>
               ))}
             </Card>
           )}
