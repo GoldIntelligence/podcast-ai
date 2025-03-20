@@ -1,3 +1,85 @@
+# 播客AI系统
+
+一款基于AI的播客生成系统，可以通过文本对话生成高质量播客音频。
+
+## 系统架构
+
+- **前端**：React + TypeScript + Ant Design
+- **后端**：Node.js + Express + TypeScript
+- **容器化**：Docker + Nginx
+
+## 功能特点
+
+- 🎙️ 音色选择与自定义
+- 📝 对话式脚本编辑
+- 🔊 高质量TTS音频合成
+- 📦 播客存档与管理
+- 🎵 音频播放与下载
+
+## 快速部署
+
+### 使用Docker部署（推荐）
+
+1. 确保已安装Docker和Docker Compose
+2. 克隆仓库：`git clone <仓库地址>`
+3. 进入项目目录：`cd podcast-ai`
+4. 运行部署脚本：`./deploy.sh`
+5. 访问应用：`http://localhost`
+
+### 手动部署
+
+#### 前端
+
+```bash
+cd client
+npm install
+npm run build
+# 使用Nginx或其他服务器部署build目录
+```
+
+#### 后端
+
+```bash
+cd server
+npm install
+npm run build
+npm start
+```
+
+## 环境变量配置
+
+系统使用环境变量进行配置管理：
+
+### 前端环境变量
+
+- `REACT_APP_API_URL`: 后端API地址
+- `REACT_APP_FRONTEND_PORT`: 前端服务端口
+
+### 后端环境变量
+
+- `PORT`: 服务器端口
+- `NODE_ENV`: 环境模式
+- `UPLOAD_DIR`: 上传文件目录
+- `GENERATED_DIR`: 生成文件目录
+- `STEP_API_KEY`: STEP API密钥
+- `TTS_API_ENDPOINT`: TTS API地址
+
+## 文件上传说明
+
+系统支持文档拖拽上传，文件会保存在服务器的`uploads`目录中。在Docker部署模式下，该目录通过卷挂载到主机，确保数据持久化。
+
+## 使用流程
+
+1. 创建/选择对话脚本
+2. 选择合适的音色
+3. 调整语速和情感参数
+4. 生成播客音频
+5. 预览并下载音频文件
+
+## 技术支持
+
+如有问题请联系技术支持团队。
+
 ### 播客生成系统 PRD
 
 启动后端服务器（在server目录下运行npm run dev）

@@ -29,7 +29,7 @@ initDatabase()
 
 // 中间件
 app.use(cors({
-  origin: ['http://localhost:3000', '*'],  // 允许来自前端的请求
+  origin: ['http://localhost:3000', 'http://localhost:3001', '*'],  // 允许来自前端的请求
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true  // 允许携带凭证

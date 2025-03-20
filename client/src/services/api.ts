@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// 添加调试信息，展示实际API请求地址
-const BASE_URL = 'http://localhost:5001/api';
+// 使用环境变量中的API URL
+const BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
 console.log('API服务器URL:', BASE_URL);
 
 // 创建带有详细配置的axios实例
@@ -136,9 +136,9 @@ export const ttsAPI = {
       const taskId = taskIdMatch[1];
       console.log('检测到任务ID:', taskId);
       try {
-        // 使用专门的下载端点
+        // 使用专门的下载端点 - 使用相对路径，适配不同环境
         const response = await axios({
-          url: `http://localhost:5001/api/tts/download/${taskId}`,
+          url: `${BASE_URL}/tts/download/${taskId}`,
           method: 'GET',
           responseType: 'blob'
         });

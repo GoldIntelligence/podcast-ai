@@ -1,0 +1,84 @@
+services:
+  frontend:
+    build: 
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: podcast-ai-frontend-1
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+  backend:
+    build: 
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: podcast-ai-backend-1
+    ports:
+      - "5001:5001"
+    environment:
+      - NODE_ENV=production
+      - PORT=5001
+      - UPLOAD_DIR=uploads
+      - GENERATED_DIR=generated
+      - MAX_FILE_SIZE=50mb
+      - STEP_API_KEY=${STEP_API_KEY}
+      - TTS_API_ENDPOINT=${TTS_API_ENDPOINT}
+      - LLM_API_KEY=${LLM_API_KEY}
+      - LLM_API_ENDPOINT=${LLM_API_ENDPOINT}
+      # 数据库连接环境变量 - 使用Docker服务名
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=podcast_user
+      - DB_PASSWORD=podcast_pass
+      - DB_NAME=podcast_db
+    volumes:
+      - ./server/uploads:/app/uploads
+      - ./server/generated:/app/generated
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  mysql:
+    image: mysql:8.0
+    container_name: podcast-ai-mysql
+    command: 
+      - --authentication-policy=mysql_native_password
+      - --bind-address=0.0.0.0
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: 123456
+      MYSQL_DATABASE: podcast_db
+      MYSQL_USER: podcast_user
+      MYSQL_PASSWORD: podcast_pass
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./db/init:/docker-entrypoint-initdb.d
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-u", "root", "-p123456"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  mysql-data:
+    driver: local
+
+networks:
+  app-network:
+    driver: bridge 
