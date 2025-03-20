@@ -7,8 +7,11 @@ COPY . .
 # 复制 package.json 和 package-lock.json
 COPY package*.json ./
 
-# 安装必要的工具
-RUN apk add --no-cache netcat-openbsd
+# 安装必要的工具和Python
+RUN apk add netcat-openbsd python3 py3-pip ffmpeg
+
+# 允许安装pip包到系统Python（仅在容器环境中安全）
+RUN pip3 install --break-system-packages pydub
 
 # 安装依赖（包括开发依赖，用于构建）
 RUN npm ci
