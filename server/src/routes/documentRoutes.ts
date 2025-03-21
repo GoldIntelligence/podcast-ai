@@ -200,4 +200,139 @@ router.post('/summarize', async (req, res) => {
   }
 });
 
+
+// 文档总结生成资讯简报
+router.post('/briefing', async (req, res) => {
+  try {
+    const { filePath } = req.body;
+    
+    if (!filePath) {
+      res.status(400).json({ success: false, message: '未提供文件路径' });
+      return;
+    }
+    
+    // 提取文件内容
+    const fileContent = await extractTextFromFile(filePath);
+    
+    // 调用OpenAI API
+    const client = new OpenAI({
+      apiKey: process.env.LLM_API_KEY || "STEP_API_KEY", 
+      baseURL: process.env.LLM_API_ENDPOINT || "https://api.stepfun.com/v1"
+    });
+    
+    const completion = await client.chat.completions.create({
+      model: "step-1-8k",
+      messages: [
+        {
+          role: "system",
+          content: `你是一位专业的财经资讯分析师，擅长提炼和总结财经信息。请对提供的财经资讯进行深入分析和总结。
+请以JSON格式返回以下内容:
+1. title: 为资讯生成一个简洁的标题
+2. summary: 一段简短的总体概述
+3. key_points: 数组格式, 包含3-5个关键要点
+4. market_impact: 对市场可能产生的影响分析
+5. expert_opinion: 专业分析师的观点和建议
+请确保生成的JSON格式正确且易于解析。内容应该专业、客观, 并突出重要信息。`
+        },
+        {
+          role: "user", 
+          content: fileContent
+        }
+      ],
+      response_format: { type: "json_object" }
+    });
+    
+    // 解析响应，生成简报
+    const responseContent = completion.choices[0].message.content;
+    
+    let briefing;
+    try {
+      // 尝试解析JSON响应
+      const parsedResponse = JSON.parse(responseContent || '{}');
+      
+      // 获取标题
+      let title = parsedResponse.title || '财经资讯简报';
+      let summary = parsedResponse.summary || '';
+      let key_points = parsedResponse.key_points || [];
+      let market_impact = parsedResponse.market_impact || '';
+      let expert_opinion = parsedResponse.expert_opinion || '';
+      
+      // 生成时间戳
+      const currentTime = new Date();
+      const formattedTime = `${currentTime.getFullYear()}-${currentTime.getMonth() + 1}-${currentTime.getDate()} ${currentTime.getHours()}:${currentTime.getMinutes()}`;
+      
+      // 构建最终的简报结构
+      briefing = {
+        title: `${title} ${formattedTime}`,
+        summary: summary,
+        key_points: key_points,
+        market_impact: market_impact,
+        expert_opinion: expert_opinion,
+        createdAt: new Date().toISOString()
+      };
+
+    } catch (error) {
+      console.error('解析JSON响应失败:', error);
+      
+      // 解析失败时，尝试从文本中提取有用信息
+      const lines = (responseContent === null || responseContent === void 0 ? void 0 : responseContent.split('\n').filter(line => line.trim())) || [];
+    
+      let title = '财经资讯简报';
+      let summary = '';
+      let key_points = [];
+      let market_impact = '';
+      let expert_opinion = '';
+      
+      // 遍历文本行提取信息
+      for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (line.includes('标题') || line.includes('title')) {
+              title = line.split(/[：:]/)[1]?.trim() || title;
+          } else if (line.includes('概述') || line.includes('summary')) {
+              summary = line.split(/[：:]/)[1]?.trim() || '';
+          } else if (line.includes('要点') || line.includes('points')) {
+              // 收集后续的要点
+              while (i + 1 < lines.length && lines[i + 1].trim() && !lines[i + 1].includes('影响') && !lines[i + 1].includes('观点')) {
+                  i++;
+                  key_points.push(lines[i].trim());
+              }
+          } else if (line.includes('影响') || line.includes('impact')) {
+              market_impact = line.split(/[：:]/)[1]?.trim() || '';
+          } else if (line.includes('观点') || line.includes('opinion')) {
+              expert_opinion = line.split(/[：:]/)[1]?.trim() || '';
+          }
+      }
+      
+      // 如果没有成功提取简报内容，使用完整的响应内容
+      if (summary.length === 0) {
+        summary = responseContent || '无法生成有效内容';
+      }
+      
+      // 生成时间
+      const currentTime = new Date();
+      const formattedTime = `${currentTime.getFullYear()}-${currentTime.getMonth() + 1}-${currentTime.getDate()} ${currentTime.getHours()}:${currentTime.getMinutes()}`;
+      
+      briefing = {
+        title: `${title} ${formattedTime}`,
+        summary: summary,
+        key_points: key_points,
+        market_impact: market_impact,
+        expert_opinion: expert_opinion,
+        createdAt: new Date().toISOString()
+      };
+    }
+    
+    res.status(200).json({
+      success: true,
+      message: '资讯简报生成成功',
+      briefing
+    });
+    
+  } catch (error: unknown) {
+    console.error('资讯简报生成错误:', error);
+    const errorMessage = error instanceof Error ? error.message : '未知错误';
+    res.status(500).json({ success: false, message: '资讯简报生成失败: ' + errorMessage });
+  }
+});
+
 export default router; 

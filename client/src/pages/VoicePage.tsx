@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, Button, Typography, Input, message, Card, List, Progress, Space } from 'antd';
+import { Upload, Button, Typography, Input, message, Card, List, Progress, Space, Checkbox } from 'antd';
 import { UploadOutlined, SoundOutlined, DeleteOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import { voiceAPI } from '../services/api';
 
@@ -11,6 +11,7 @@ interface VoiceItem {
   name: string;
   type: 'system' | 'cloned';
   createdAt?: string;
+  usedForBriefing?: boolean;
 }
 
 const VoicePage: React.FC = () => {
@@ -25,6 +26,7 @@ const VoicePage: React.FC = () => {
     progress: number;
     status: string;
   }[]>([]);
+  const [isForBriefing, setIsForBriefing] = useState(false);
 
   // 加载音色列表
   useEffect(() => {
@@ -107,7 +109,8 @@ const VoicePage: React.FC = () => {
       const response = await voiceAPI.cloneVoice(
         audioFile.path,
         transcription,
-        voiceName
+        voiceName,
+        isForBriefing
       );
       
       // 添加到克隆任务列表
@@ -126,10 +129,23 @@ const VoicePage: React.FC = () => {
       setAudioFile(null);
       setTranscription('');
       setVoiceName('');
+      setIsForBriefing(false);
     } catch (error) {
       message.error('提交音色克隆任务失败！');
     } finally {
       setCloning(false);
+    }
+  };
+
+  // 更新音色使用场景
+  const handleUpdateVoiceUsage = async (voiceId: string, usedForBriefing: boolean) => {
+    try {
+      await voiceAPI.updateVoiceUsage(voiceId, usedForBriefing);
+      message.success('音色使用场景更新成功');
+      fetchVoiceList();
+    } catch (error) {
+      message.error('更新音色使用场景失败');
+      console.error('更新音色使用场景失败:', error);
     }
   };
 
@@ -178,6 +194,15 @@ const VoicePage: React.FC = () => {
         </div>
         
         <div style={{ marginTop: 20 }}>
+          <Checkbox 
+            checked={isForBriefing}
+            onChange={(e) => setIsForBriefing(e.target.checked)}
+          >
+            可用于资讯简报
+          </Checkbox>
+        </div>
+        
+        <div style={{ marginTop: 20 }}>
           <Button
             type="primary"
             icon={<SoundOutlined />}
@@ -221,7 +246,15 @@ const VoicePage: React.FC = () => {
               actions={[
                 <Button icon={<PlayCircleOutlined />} type="text">试听</Button>,
                 item.type === 'cloned' && (
-                  <Button icon={<DeleteOutlined />} type="text" danger>删除</Button>
+                  <>
+                    <Checkbox 
+                      checked={item.usedForBriefing}
+                      onChange={(e) => handleUpdateVoiceUsage(item.id, e.target.checked)}
+                    >
+                      用于简报
+                    </Checkbox>
+                    <Button icon={<DeleteOutlined />} type="text" danger>删除</Button>
+                  </>
                 )
               ]}
             >

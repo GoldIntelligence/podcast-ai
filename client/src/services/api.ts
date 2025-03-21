@@ -11,7 +11,7 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
   // 超时设置
-  timeout: 10000,
+  timeout: 100000,
   // 禁用凭证，避免CORS问题
   withCredentials: false
 });
@@ -48,9 +48,57 @@ export const documentAPI = {
   },
   
   // 生成对话稿
-  generateScript: (filePath: string) => {
-    return api.post('/documents/summarize', { filePath });
+  generateScript: (filePath: string | any) => {
+    console.log('调用生成对话稿API，文件路径:', filePath);
+    // 确保filePath是字符串
+    const path = typeof filePath === 'object' && filePath 
+      ? (filePath.path || filePath.filePath || JSON.stringify(filePath)) 
+      : filePath;
+    return api.post('/documents/summarize', { filePath: path });
   },
+
+  // 生成资讯简报
+  generateBriefing: (filePath: string | any, wordCount: number = 500) => {
+    console.log('调用生成简报API，文件路径:', filePath, '字数:', wordCount);
+    // 确保filePath是字符串
+    const path = typeof filePath === 'object' && filePath 
+      ? (filePath.path || filePath.filePath || JSON.stringify(filePath)) 
+      : filePath;
+    return api.post('/documents/briefing', { filePath: path, wordCount });
+  },
+
+  // 获取所有资讯简报
+  getAllBriefings: () => {
+    return api.get('/documents/briefings');
+  },
+
+  // 保存资讯简报
+  saveBriefing: (briefing: any) => {
+    return api.post('/documents/briefings', briefing);
+  },
+
+  // 更新资讯简报
+  updateBriefing: (id: number, briefing: any) => {
+    return api.put(`/documents/briefings/${id}`, briefing);
+  },
+
+  // 删除资讯简报
+  deleteBriefing: (id: number) => {
+    return api.delete(`/documents/briefings/${id}`);
+  },
+
+  // 生成语音
+  generateTts: (script: string, voiceId: string) => {
+    return api.post('/tts/generate', {
+      script,
+      voice_id: voiceId
+    });
+  },
+  
+  // 获取语音生成进度
+  getTtsProgress: () => {
+    return api.get('/tts/progress');
+  }
 };
 
 // 音色相关API
@@ -68,8 +116,8 @@ export const voiceAPI = {
   },
   
   // 克隆音色
-  cloneVoice: (audioPath: string, transcription: string, voiceName: string) => {
-    return api.post('/voices/clone', { audioPath, transcription, voiceName });
+  cloneVoice: (audioPath: string, transcription: string, voiceName: string, usedForBriefing: boolean = false) => {
+    return api.post('/voices/clone', { audioPath, transcription, voiceName, usedForBriefing });
   },
   
   // 获取克隆进度
@@ -81,6 +129,11 @@ export const voiceAPI = {
   getAllVoices: () => {
     return api.get('/voices/all');
   },
+  
+  // 更新音色使用场景
+  updateVoiceUsage: (voiceId: string, usedForBriefing: boolean) => {
+    return api.put(`/voices/${voiceId}/usage`, { usedForBriefing });
+  },
 };
 
 // TTS相关API
@@ -90,7 +143,7 @@ export const ttsAPI = {
     dialogue: { id?: number; title: string; speakers: string[]; content: { speaker: string; text: string }[] }, 
     voiceId: string, 
     speed: number, 
-    emotionMode: string
+    emotionMode: string = 'normal'
   ) => {
     console.log('提交TTS生成请求:', { dialogue, voiceId, speed, emotionMode });
     return api.post('/tts/generate', {

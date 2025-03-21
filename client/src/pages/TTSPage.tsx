@@ -27,6 +27,17 @@ interface Dialogue {
   createdAt?: string;
 }
 
+interface Briefing {
+  id?: number;
+  title: string;
+  summary: string;
+  key_points: string[];
+  market_impact?: string;
+  expert_opinion?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 interface TTSTask {
   taskId: string;
   progress: number;
@@ -40,6 +51,8 @@ const TTSPage: React.FC = () => {
   const [speed, setSpeed] = useState(1);
   const [emotionMode, setEmotionMode] = useState('dialog');
   const [dialogue, setDialogue] = useState<Dialogue | null>(null);
+  const [briefing, setBriefing] = useState<Briefing | null>(null);
+  const [contentType, setContentType] = useState<'dialogue' | 'briefing'>('dialogue');
   const [generating, setGenerating] = useState(false);
   const [ttsTasks, setTtsTasks] = useState<TTSTask[]>([]);
   const [audioPreview, setAudioPreview] = useState<HTMLAudioElement | null>(null);
@@ -60,6 +73,21 @@ const TTSPage: React.FC = () => {
     const params = new URLSearchParams(location.search);
     const dialogueId = params.get('dialogueId');
     const taskId = params.get('taskId');
+    const voiceId = params.get('voiceId'); // 获取音色ID
+    const type = params.get('type'); // 获取内容类型
+    
+    if (type === 'briefing') {
+      setContentType('briefing');
+      setEmotionMode('briefing');
+    } else {
+      setContentType('dialogue');
+      setEmotionMode('dialog');
+    }
+    
+    if (voiceId) {
+      // 设置选中音色
+      setSelectedVoice(voiceId);
+    }
     
     if (dialogueId) {
       // 加载指定ID的对话稿
@@ -85,7 +113,19 @@ const TTSPage: React.FC = () => {
             }]);
             
             if (response.data.status === 'completed' && response.data.audioUrl) {
-              setAudioPreview(new Audio(response.data.audioUrl));
+              const audio = new Audio(response.data.audioUrl);
+              
+              // 添加事件监听器
+              audio.addEventListener('loadeddata', () => {
+                console.log('音频加载成功', response.data.audioUrl);
+              });
+              
+              audio.addEventListener('error', (e) => {
+                console.error('音频加载错误', e);
+                message.error('音频加载失败，请刷新页面重试');
+              });
+              
+              setAudioPreview(audio);
             }
           }
         } catch (error) {
@@ -93,17 +133,63 @@ const TTSPage: React.FC = () => {
         }
       })();
     } else {
-      // 从本地存储或全局状态加载对话稿
-      const savedDialogue = localStorage.getItem('currentDialogue');
-      if (savedDialogue) {
-        try {
-          setDialogue(JSON.parse(savedDialogue));
-        } catch (error) {
-          console.error('解析对话稿失败', error);
+      // 从本地存储或全局状态加载内容
+      if (type === 'briefing') {
+        const savedBriefing = localStorage.getItem('current_briefing_for_tts');
+        if (savedBriefing) {
+          try {
+            setBriefing(JSON.parse(savedBriefing));
+          } catch (error) {
+            console.error('解析简报失败', error);
+          }
+        }
+      } else {
+        const savedDialogue = localStorage.getItem('currentDialogue');
+        if (savedDialogue) {
+          try {
+            setDialogue(JSON.parse(savedDialogue));
+          } catch (error) {
+            console.error('解析对话稿失败', error);
+          }
         }
       }
     }
   }, [location.search]);
+
+  // 在音频元素上添加事件监听
+  useEffect(() => {
+    if (audioPreview) {
+      const handleEnded = () => {
+        setIsPlaying(false);
+      };
+      
+      const handlePlay = () => {
+        setIsPlaying(true);
+      };
+      
+      const handlePause = () => {
+        setIsPlaying(false);
+      };
+      
+      const handleError = (e: Event) => {
+        console.error('音频播放错误', e);
+        message.error('音频播放失败，请刷新页面重试');
+        setIsPlaying(false);
+      };
+      
+      audioPreview.addEventListener('ended', handleEnded);
+      audioPreview.addEventListener('play', handlePlay);
+      audioPreview.addEventListener('pause', handlePause);
+      audioPreview.addEventListener('error', handleError);
+      
+      return () => {
+        audioPreview.removeEventListener('ended', handleEnded);
+        audioPreview.removeEventListener('play', handlePlay);
+        audioPreview.removeEventListener('pause', handlePause);
+        audioPreview.removeEventListener('error', handleError);
+      };
+    }
+  }, [audioPreview]);
 
   // 更新TTS任务进度
   useEffect(() => {
@@ -153,6 +239,7 @@ const TTSPage: React.FC = () => {
       const response = await axios.get(`/api/dialogues/${dialogueId}`);
       if (response.data) {
         setDialogue(response.data);
+        setContentType('dialogue');
         // 更新URL，移除dialogueId参数
         navigate('/tts', { replace: true });
       }
@@ -184,7 +271,20 @@ const TTSPage: React.FC = () => {
         
         // 播放预览
         if (updatedTasks[i].status === 'completed' && response.data.audioUrl) {
-          setAudioPreview(new Audio(response.data.audioUrl));
+          console.log('设置音频URL:', response.data.audioUrl);
+          const audio = new Audio(response.data.audioUrl);
+          
+          // 添加事件监听器
+          audio.addEventListener('loadeddata', () => {
+            console.log('音频加载成功');
+          });
+          
+          audio.addEventListener('error', (e) => {
+            console.error('音频加载错误', e);
+            message.error('音频加载失败，请刷新页面重试');
+          });
+          
+          setAudioPreview(audio);
         }
       } catch (error) {
         console.error('获取进度失败', error);
@@ -196,20 +296,60 @@ const TTSPage: React.FC = () => {
 
   // 处理生成TTS
   const handleGenerateTTS = async () => {
-    if (!selectedVoice || !dialogue) {
-      message.warning('请选择音色和准备对话稿');
+    if (!selectedVoice) {
+      message.warning('请选择音色');
+      return;
+    }
+    
+    if (contentType === 'briefing' && !briefing) {
+      message.warning('请准备简报内容');
+      return;
+    }
+    
+    if (contentType === 'dialogue' && !dialogue) {
+      message.warning('请准备对话稿');
       return;
     }
     
     setGenerating(true);
     
     try {
-      const response = await ttsAPI.generateTTS(
-        dialogue,
-        selectedVoice,
-        speed,
-        emotionMode
-      );
+      let response;
+      if (contentType === 'briefing' && briefing) {
+        // 构建语音文本
+        const script = `
+今日简讯：${briefing.title}
+
+${briefing.summary}
+
+关键要点：
+${briefing.key_points.map((point, index) => `${index + 1}. ${point}`).join('\n')}
+${briefing.market_impact ? `市场影响：\n${briefing.market_impact}\n` : ''}
+${briefing.expert_opinion ? `专家观点：\n${briefing.expert_opinion}` : ''}
+        `.trim();
+
+        response = await ttsAPI.generateTTS(
+          {
+            title: briefing.title,
+            speakers: ['主播'],
+            content: [
+              { speaker: '主播', text: script }
+            ]
+          },
+          selectedVoice,
+          speed,
+          'briefing'
+        );
+      } else if (contentType === 'dialogue' && dialogue) {
+        response = await ttsAPI.generateTTS(
+          dialogue,
+          selectedVoice,
+          speed,
+          emotionMode
+        );
+      } else {
+        throw new Error('没有可用的内容');
+      }
       
       // 添加到任务列表
       setTtsTasks([
@@ -231,15 +371,33 @@ const TTSPage: React.FC = () => {
 
   // 播放/暂停预览
   const togglePlay = () => {
-    if (!audioPreview) return;
-    
-    if (isPlaying) {
-      audioPreview.pause();
-    } else {
-      audioPreview.play();
+    if (!audioPreview) {
+      message.error('没有可用的音频');
+      return;
     }
     
-    setIsPlaying(!isPlaying);
+    try {
+      if (isPlaying) {
+        audioPreview.pause();
+      } else {
+        // 确保音频URL是可用的
+        if (!audioPreview.src) {
+          message.error('音频源不可用');
+          return;
+        }
+        
+        const playPromise = audioPreview.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(error => {
+            console.error('播放失败:', error);
+            message.error('播放失败，请刷新页面重试');
+          });
+        }
+      }
+    } catch (error) {
+      console.error('播放控制错误:', error);
+      message.error('播放控制失败');
+    }
   };
 
   // 下载音频文件

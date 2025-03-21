@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Form, Input, Button, Select, List, Space, Typography, message } from 'antd';
-import { PlusOutlined, DeleteOutlined, EditOutlined, SaveOutlined, CloudUploadOutlined } from '@ant-design/icons';
-import { dialogueAPI } from '../../services/api';
+import { Form, Input, Button, Select, List, Space, Typography, message, Modal, Spin } from 'antd';
+import { PlusOutlined, DeleteOutlined, EditOutlined, SaveOutlined, CloudUploadOutlined, SoundOutlined } from '@ant-design/icons';
+import { dialogueAPI, ttsAPI } from '../../services/api';
+import { useNavigate } from 'react-router-dom';
 
 const { TextArea } = Input;
 const { Option } = Select;
@@ -33,6 +34,17 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ dialogue, onDialogueChange 
   const [currentItem, setCurrentItem] = useState<DialogueContent>({ speaker: '', text: '' });
   const [isSaving, setIsSaving] = useState(false);
   const typingTimersRef = useRef<NodeJS.Timeout[]>([]);
+  const [selectedVoice, setSelectedVoice] = useState('langxianping');
+  const [ttsModalVisible, setTtsModalVisible] = useState(false);
+  const [generatingTTS, setGeneratingTTS] = useState(false);
+  
+  const navigate = useNavigate();
+  
+  // 固定的音色选项
+  const voiceOptions = [
+    { id: 'langxianping', name: '郎咸平', type: 'system' },
+    { id: 'lidaxiao', name: '李大霄', type: 'system' }
+  ];
   
   // 在组件卸载时清除所有定时器
   useEffect(() => {
@@ -305,6 +317,47 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ dialogue, onDialogueChange 
     }
   };
 
+  // 处理转为语音
+  const handleTTS = () => {
+    setTtsModalVisible(true);
+  };
+  
+  // 处理音色选择后的TTS处理
+  const handleTTSWithVoice = async () => {
+    if (!selectedVoice) {
+      message.warning('请选择音色');
+      return;
+    }
+    
+    try {
+      setGeneratingTTS(true);
+      message.loading({ content: '提交TTS合成任务...', key: 'ttsTask', duration: 0 });
+
+      // 调用TTS API开始合成
+      const response = await ttsAPI.generateTTS(
+        currentDialogue, 
+        selectedVoice, // 使用选定的音色
+        1, // 默认语速
+        'dialog' // 对话模式
+      );
+
+      if (response.data && response.data.success) {
+        message.success({ content: 'TTS合成任务已提交！正在跳转到TTS页面查看进度...', key: 'ttsTask', duration: 2 });
+        // 关闭模态框
+        setTtsModalVisible(false);
+        // 跳转到TTS页面并直接显示任务进度
+        navigate(`/tts?taskId=${response.data.taskId}`);
+      } else {
+        message.error({ content: '提交TTS任务失败', key: 'ttsTask' });
+      }
+    } catch (error) {
+      console.error('TTS任务提交失败:', error);
+      message.error({ content: '提交TTS任务失败，请重试', key: 'ttsTask' });
+    } finally {
+      setGeneratingTTS(false);
+    }
+  };
+
   return (
     <div>
       <Form layout="vertical">
@@ -325,6 +378,14 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ dialogue, onDialogueChange 
             loading={isSaving}
           >
             保存稿件
+          </Button>
+          
+          <Button
+            type="primary"
+            icon={<SoundOutlined />}
+            onClick={handleTTS}
+          >
+            转为语音
           </Button>
         </Space>
         
@@ -406,6 +467,52 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ dialogue, onDialogueChange 
             </Button>
           )}
         </Space>
+        
+        {/* 音色选择模态框 */}
+        <Modal
+          title="选择音色"
+          open={ttsModalVisible}
+          onCancel={() => !generatingTTS && setTtsModalVisible(false)}
+          footer={[
+            <Button key="cancel" onClick={() => setTtsModalVisible(false)} disabled={generatingTTS}>
+              取消
+            </Button>,
+            <Button 
+              key="submit" 
+              type="primary" 
+              onClick={handleTTSWithVoice} 
+              loading={generatingTTS}
+              disabled={generatingTTS}
+            >
+              生成语音
+            </Button>
+          ]}
+          closable={!generatingTTS}
+          maskClosable={!generatingTTS}
+        >
+          <Form layout="vertical">
+            <Form.Item label="选择要使用的音色">
+              <Select
+                value={selectedVoice}
+                onChange={(value) => setSelectedVoice(value)}
+                style={{ width: '100%' }}
+                disabled={generatingTTS}
+              >
+                {voiceOptions.map(voice => (
+                  <Select.Option key={voice.id} value={voice.id}>
+                    {voice.name}
+                  </Select.Option>
+                ))}
+              </Select>
+            </Form.Item>
+            {generatingTTS && (
+              <div style={{ textAlign: 'center', marginTop: 16 }}>
+                <Spin />
+                <p style={{ marginTop: 8 }}>正在提交语音生成任务，请稍候...</p>
+              </div>
+            )}
+          </Form>
+        </Modal>
       </Form>
     </div>
   );
