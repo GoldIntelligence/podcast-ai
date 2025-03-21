@@ -41,8 +41,8 @@ const BriefingEditor: React.FC<BriefingEditorProps> = ({ briefing, onBriefingCha
 
   // 语音选项
   const voiceOptions = [
-    { value: 'langxianping', label: '郎咸平' },
-    { value: 'lidaxiao', label: '李大霄' }
+    { value: 'langxianping', label: '郎咸平 (财经解读)' },
+    { value: 'lidaxiao', label: '李大霄 (股市分析)' }
   ];
 
   // 加载音色列表
@@ -311,7 +311,7 @@ ${briefing.expert_opinion ? `专家观点：\n${briefing.expert_opinion}` : ''}
             <Button 
               type="primary" 
               icon={<AudioOutlined />}
-              onClick={handleDirectTTS}
+              onClick={() => setTtsModalVisible(true)}
             >
               生成语音
             </Button>
@@ -320,7 +320,7 @@ ${briefing.expert_opinion ? `专家观点：\n${briefing.expert_opinion}` : ''}
       </Form>
 
       <Modal
-        title="选择音色"
+        title="选择语音音色"
         open={ttsModalVisible}
         onCancel={() => !generatingTts && setTtsModalVisible(false)}
         onOk={handleGenerateTts}
@@ -329,16 +329,24 @@ ${briefing.expert_opinion ? `专家观点：\n${briefing.expert_opinion}` : ''}
         cancelButtonProps={{ disabled: generatingTts }}
         closable={!generatingTts}
         maskClosable={!generatingTts}
+        okText="开始生成"
+        cancelText="取消"
+        width={400}
       >
         <Form layout="vertical">
-          <Form.Item label="选择音色">
+          <Form.Item label="请选择您想要的语音音色">
             <Select
               value={selectedVoice}
               onChange={setSelectedVoice}
               options={voiceOptions}
               disabled={generatingTts}
+              style={{ width: '100%' }}
+              size="large"
             />
           </Form.Item>
+          <div style={{ marginBottom: 16 }}>
+            <p>您可以选择郎咸平或李大霄的语音音色进行语音合成</p>
+          </div>
           {generatingTts && (
             <Form.Item label="生成进度">
               <Progress 
