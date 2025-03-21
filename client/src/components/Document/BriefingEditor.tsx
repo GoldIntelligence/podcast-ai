@@ -250,29 +250,43 @@ ${briefing.expert_opinion ? `专家观点：\n${briefing.expert_opinion}` : ''}
         </Form.Item>
 
         <Form.Item label="关键要点">
-          <Form.List name="key_points">
-            {(fields, { add, remove }) => (
-              <>
-                {fields.map(({ key, name, ...restField }) => (
-                  <Space key={key} style={{ display: 'flex', marginBottom: 8 }} align="baseline">
-                    <Form.Item
-                      {...restField}
-                      name={name}
-                      rules={[{ required: true, message: '请输入关键要点' }]}
-                    >
-                      <Input placeholder="请输入关键要点" />
-                    </Form.Item>
-                    <MinusCircleOutlined onClick={() => remove(name)} />
-                  </Space>
-                ))}
-                <Form.Item>
-                  <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
-                    添加关键要点
-                  </Button>
-                </Form.Item>
-              </>
-            )}
-          </Form.List>
+          <div style={{ padding: '0 0 0 32px' }}>
+            <Form.List name="key_points">
+              {(fields, { add, remove }) => (
+                <>
+                  {fields.map(({ key, name, ...restField }, index) => (
+                    <div key={key} style={{ display: 'flex', marginBottom: 8, position: 'relative' }}>
+                      <div style={{ position: 'absolute', left: -30, top: 7 }}>
+                        <strong>{index + 1}.</strong>
+                      </div>
+                      <Form.Item
+                        {...restField}
+                        name={name}
+                        rules={[{ required: true, message: '请输入关键要点' }]}
+                        style={{ marginBottom: 0, width: '100%' }}
+                      >
+                        <Input 
+                          placeholder="请输入关键要点" 
+                          style={{ width: '100%' }} 
+                          suffix={
+                            <MinusCircleOutlined
+                              onClick={() => remove(name)}
+                              style={{ color: '#ff4d4f', cursor: 'pointer' }}
+                            />
+                          }
+                        />
+                      </Form.Item>
+                    </div>
+                  ))}
+                  <Form.Item>
+                    <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
+                      添加关键要点
+                    </Button>
+                  </Form.Item>
+                </>
+              )}
+            </Form.List>
+          </div>
         </Form.Item>
 
         <Form.Item
