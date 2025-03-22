@@ -4,6 +4,7 @@ import bodyParser from 'body-parser';
 import dotenv from 'dotenv';
 import path from 'path';
 import { initDatabase } from './config/database';
+import { initAllData } from './config/initData';
 
 // 加载环境变量
 dotenv.config();
@@ -13,14 +14,23 @@ import documentRoutes from './routes/documentRoutes';
 import voiceRoutes from './routes/voiceRoutes';
 import ttsRoutes from './routes/ttsRoutes';
 import dialogueRoutes from './routes/dialogueRoutes';
+import authRoutes from './routes/authRoutes';
 
 const app = express();
 const PORT = 5001;  // 固定端口为5001
 
 // 初始化数据库（但不阻止服务器启动）
 initDatabase()
-  .then(() => {
+  .then(async () => {
     console.log('数据库初始化成功');
+    
+    // 初始化数据
+    try {
+      await initAllData();
+      console.log('数据初始化成功');
+    } catch (error) {
+      console.warn('数据初始化失败，但服务器将继续启动:', error);
+    }
   })
   .catch(error => {
     console.warn('数据库初始化失败，但服务器将继续启动:', error);
@@ -59,6 +69,7 @@ app.use('/api/documents', documentRoutes);
 app.use('/api/voices', voiceRoutes);
 app.use('/api/tts', ttsRoutes);
 app.use('/api/dialogues', dialogueRoutes);
+app.use('/api/auth', authRoutes);
 
 // 健康检查
 app.get('/health', (req, res) => {

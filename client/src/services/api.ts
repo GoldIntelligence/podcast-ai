@@ -16,8 +16,16 @@ const api = axios.create({
   withCredentials: false
 });
 
-// 拦截器：打印请求信息
+// 添加请求拦截器，用于添加认证令牌
 api.interceptors.request.use(config => {
+  // 从localStorage中获取令牌
+  const token = localStorage.getItem('token');
+  
+  // 如果存在令牌，则添加到请求头中
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  
   console.log(`发送 ${config.method?.toUpperCase()} 请求到: ${config.baseURL}${config.url}`, config.data || '');
   return config;
 }, error => {
@@ -30,9 +38,57 @@ api.interceptors.response.use(response => {
   console.log(`来自 ${response.config.url} 的响应:`, response.data);
   return response;
 }, error => {
-  console.error('响应错误:', error);
+  if (error.response) {
+    // 服务器返回了错误响应
+    console.error(`响应错误 (${error.response.status}):`, error.response.data);
+  } else if (error.request) {
+    // 请求已发送但没有收到响应
+    console.error('请求超时或无响应:', error.request);
+    
+    // 检查是否是认证相关请求
+    if (error.config && error.config.url) {
+      const url = error.config.url.toLowerCase();
+      if (url.includes('/auth/')) {
+        console.warn('认证服务不可用，某些功能可能无法正常工作');
+      }
+    }
+  } else {
+    // 设置请求时发生了错误
+    console.error('请求配置错误:', error.message);
+  }
+  
   return Promise.reject(error);
 });
+
+// 用户认证API
+export const authAPI = {
+  // 用户注册
+  register: (username: string, password: string) => {
+    return api.post('/auth/register', { username, password });
+  },
+  
+  // 用户登录
+  login: (username: string, password: string) => {
+    return api.post('/auth/login', { username, password });
+  },
+  
+  // 获取当前用户信息
+  getCurrentUser: () => {
+    return api.get('/auth/me');
+  },
+  
+  // 登出（客户端操作，清除localStorage中的令牌）
+  logout: () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    return Promise.resolve();
+  },
+  
+  // 检查是否已登录
+  isLoggedIn: () => {
+    return !!localStorage.getItem('token');
+  }
+};
 
 // 文档相关API
 export const documentAPI = {
@@ -284,6 +340,7 @@ export const dialogueAPI = {
 };
 
 export default {
+  authAPI,
   documentAPI,
   voiceAPI,
   ttsAPI,
