@@ -327,7 +327,7 @@ ${briefing.key_points.map((point, index) => `${index + 1}. ${point}`).join('\n')
 ${briefing.market_impact ? `市场影响：\n${briefing.market_impact}\n` : ''}
 ${briefing.expert_opinion ? `专家观点：\n${briefing.expert_opinion}` : ''}
         `.trim();
-
+        console.log('script', script);
         response = await ttsAPI.generateTTS(
           {
             title: briefing.title,

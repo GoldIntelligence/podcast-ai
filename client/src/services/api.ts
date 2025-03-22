@@ -10,11 +10,23 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  // 超时设置
-  timeout: 100000,
-  // 禁用凭证，避免CORS问题
-  withCredentials: false
+  timeout: 100000, // 超时设置
+  withCredentials: false // 禁用凭证，避免CORS问题
 });
+
+// 记录API请求的简化函数
+const logRequest = (method: string, url: string, data?: any) => {
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`API请求: ${method} ${url}`, data || '');
+  }
+};
+
+// 记录API响应的简化函数
+const logResponse = (url: string, data: any) => {
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`API响应: ${url}`, data);
+  }
+};
 
 // 添加请求拦截器，用于添加认证令牌
 api.interceptors.request.use(config => {
@@ -26,24 +38,43 @@ api.interceptors.request.use(config => {
     config.headers.Authorization = `Bearer ${token}`;
   }
   
-  console.log(`发送 ${config.method?.toUpperCase()} 请求到: ${config.baseURL}${config.url}`, config.data || '');
+  logRequest(config.method?.toUpperCase() || 'GET', config.url || '', config.data);
   return config;
 }, error => {
   console.error('请求发送错误:', error);
   return Promise.reject(error);
 });
 
-// 拦截器：打印响应信息
+// 响应拦截器：处理响应和错误
 api.interceptors.response.use(response => {
-  console.log(`来自 ${response.config.url} 的响应:`, response.data);
+  logResponse(response.config.url || '', response.data);
   return response;
 }, error => {
   if (error.response) {
     // 服务器返回了错误响应
     console.error(`响应错误 (${error.response.status}):`, error.response.data);
+    
+    // 处理特定错误状态码
+    switch (error.response.status) {
+      case 401:
+        // 未授权，可能需要清除无效的令牌
+        if (window.location.pathname !== '/login') {
+          console.warn('认证失效，请重新登录');
+        }
+        break;
+      case 403:
+        console.warn('没有权限访问该资源');
+        break;
+      case 404:
+        console.warn('请求的资源不存在');
+        break;
+      case 500:
+        console.error('服务器内部错误');
+        break;
+    }
   } else if (error.request) {
     // 请求已发送但没有收到响应
-    console.error('请求超时或无响应:', error.request);
+    console.error('请求超时或无响应');
     
     // 检查是否是认证相关请求
     if (error.config && error.config.url) {
@@ -59,6 +90,15 @@ api.interceptors.response.use(response => {
   
   return Promise.reject(error);
 });
+
+// 创建FormData的辅助函数
+const createFormData = (data: Record<string, any>): FormData => {
+  const formData = new FormData();
+  Object.entries(data).forEach(([key, value]) => {
+    formData.append(key, value);
+  });
+  return formData;
+};
 
 // 用户认证API
 export const authAPI = {
@@ -94,32 +134,28 @@ export const authAPI = {
 export const documentAPI = {
   // 上传文档
   uploadDocument: (file: File) => {
-    const formData = new FormData();
-    formData.append('document', file);
+    const formData = createFormData({ document: file });
     return api.post('/documents/upload', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
+      headers: { 'Content-Type': 'multipart/form-data' }
     });
+  },
+  
+  // 处理文件路径，确保是字符串
+  _formatFilePath: (filePath: string | any): string => {
+    return typeof filePath === 'object' && filePath 
+      ? (filePath.path || filePath.filePath || JSON.stringify(filePath)) 
+      : filePath;
   },
   
   // 生成对话稿
   generateScript: (filePath: string | any) => {
-    console.log('调用生成对话稿API，文件路径:', filePath);
-    // 确保filePath是字符串
-    const path = typeof filePath === 'object' && filePath 
-      ? (filePath.path || filePath.filePath || JSON.stringify(filePath)) 
-      : filePath;
+    const path = documentAPI._formatFilePath(filePath);
     return api.post('/documents/summarize', { filePath: path });
   },
 
   // 生成资讯简报
   generateBriefing: (filePath: string | any, wordCount: number = 500) => {
-    console.log('调用生成简报API，文件路径:', filePath, '字数:', wordCount);
-    // 确保filePath是字符串
-    const path = typeof filePath === 'object' && filePath 
-      ? (filePath.path || filePath.filePath || JSON.stringify(filePath)) 
-      : filePath;
+    const path = documentAPI._formatFilePath(filePath);
     return api.post('/documents/briefing', { filePath: path, wordCount });
   },
 
@@ -141,19 +177,6 @@ export const documentAPI = {
   // 删除资讯简报
   deleteBriefing: (id: number) => {
     return api.delete(`/documents/briefings/${id}`);
-  },
-
-  // 生成语音
-  generateTts: (script: string, voiceId: string) => {
-    return api.post('/tts/generate', {
-      script,
-      voice_id: voiceId
-    });
-  },
-  
-  // 获取语音生成进度
-  getTtsProgress: () => {
-    return api.get('/tts/progress');
   }
 };
 
@@ -161,19 +184,23 @@ export const documentAPI = {
 export const voiceAPI = {
   // 上传音频样本
   uploadSample: (file: File, transcription: string) => {
-    const formData = new FormData();
-    formData.append('audioSample', file);
-    formData.append('transcription', transcription);
+    const formData = createFormData({
+      audioSample: file,
+      transcription
+    });
     return api.post('/voices/upload', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
+      headers: { 'Content-Type': 'multipart/form-data' }
     });
   },
   
   // 克隆音色
   cloneVoice: (audioPath: string, transcription: string, voiceName: string, usedForBriefing: boolean = false) => {
-    return api.post('/voices/clone', { audioPath, transcription, voiceName, usedForBriefing });
+    return api.post('/voices/clone', { 
+      audioPath, 
+      transcription, 
+      voiceName, 
+      usedForBriefing 
+    });
   },
   
   // 获取克隆进度
@@ -189,19 +216,18 @@ export const voiceAPI = {
   // 更新音色使用场景
   updateVoiceUsage: (voiceId: string, usedForBriefing: boolean) => {
     return api.put(`/voices/${voiceId}/usage`, { usedForBriefing });
-  },
+  }
 };
 
 // TTS相关API
 export const ttsAPI = {
   // 生成TTS
-  generateTTS: async (
+  generateTTS: (
     dialogue: { id?: number; title: string; speakers: string[]; content: { speaker: string; text: string }[] }, 
     voiceId: string, 
     speed: number, 
     emotionMode: string = 'normal'
   ) => {
-    console.log('提交TTS生成请求:', { dialogue, voiceId, speed, emotionMode });
     return api.post('/tts/generate', {
       script: dialogue,
       voiceId,
@@ -211,11 +237,8 @@ export const ttsAPI = {
   },
   
   // 获取TTS生成进度
-  getTTSProgress: async (taskId: string) => {
-    console.log('获取TTS进度:', taskId);
-    const response = await api.get(`/tts/progress/${taskId}`);
-    console.log('TTS进度响应:', response.data);
-    return response;
+  getTTSProgress: (taskId: string) => {
+    return api.get(`/tts/progress/${taskId}`);
   },
   
   // 获取所有播客
@@ -228,64 +251,36 @@ export const ttsAPI = {
     return api.delete(`/tts/podcasts/${podcastId}`);
   },
   
-  // 新增方法：直接下载TTS音频
-  downloadTTSAudio: async (audioUrl: string, filename: string): Promise<boolean> => {
-    console.log('开始下载TTS音频:', audioUrl);
-    
-    // 处理相对URL，确保它是完整的URL
+  // 处理URL，确保是完整URL
+  _formatAudioUrl: (audioUrl: string): string => {
     if (audioUrl.startsWith('/api/')) {
-      // 本地开发环境中，需要补充域名和端口
-      audioUrl = `http://localhost:5001${audioUrl.substring(4)}`;
-      console.log('转换后的完整URL:', audioUrl);
+      return `http://localhost:5001${audioUrl.substring(4)}`;
     }
+    return audioUrl;
+  },
+  
+  // 下载TTS音频
+  downloadTTSAudio: async (audioUrl: string, filename: string): Promise<boolean> => {
+    // 处理相对URL，确保它是完整的URL
+    const fullUrl = ttsAPI._formatAudioUrl(audioUrl);
     
     // 如果URL包含taskId，直接使用专门的下载接口
-    const taskIdMatch = audioUrl.match(/\/audio\/([^/]+)\/mixed_audio\.mp3$/);
+    const taskIdMatch = fullUrl.match(/\/audio\/([^/]+)\/mixed_audio\.mp3$/);
+    let downloadUrl = fullUrl;
+    
     if (taskIdMatch && taskIdMatch[1]) {
       const taskId = taskIdMatch[1];
-      console.log('检测到任务ID:', taskId);
-      try {
-        // 使用专门的下载端点 - 使用相对路径，适配不同环境
-        const response = await axios({
-          url: `${BASE_URL}/tts/download/${taskId}`,
-          method: 'GET',
-          responseType: 'blob'
-        });
-        
-        console.log('下载响应:', response.status);
-        
-        // 创建Blob URL并触发下载
-        const blobUrl = window.URL.createObjectURL(
-          new Blob([response.data], { type: 'audio/mpeg' })
-        );
-        const link = document.createElement('a');
-        link.href = blobUrl;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        // 清理Blob URL
-        setTimeout(() => {
-          window.URL.revokeObjectURL(blobUrl);
-        }, 100);
-        
-        return true;
-      } catch (error) {
-        console.error('专用下载接口失败, 回退到常规方式:', error);
-      }
+      // 使用专门的下载端点
+      downloadUrl = `${BASE_URL}/tts/download/${taskId}`;
     }
     
-    // 常规下载方式
     try {
-      console.log('使用常规方式下载URL:', audioUrl);
+      // 下载文件
       const response = await axios({
-        url: audioUrl,
+        url: downloadUrl,
         method: 'GET',
         responseType: 'blob'
       });
-      
-      console.log('常规下载响应:', response.status);
       
       // 创建Blob URL并触发下载
       const blobUrl = window.URL.createObjectURL(
@@ -336,7 +331,7 @@ export const dialogueAPI = {
   // 删除对话稿
   deleteDialogue: (id: number) => {
     return api.delete(`/dialogues/${id}`);
-  },
+  }
 };
 
 export default {
@@ -344,5 +339,5 @@ export default {
   documentAPI,
   voiceAPI,
   ttsAPI,
-  dialogueAPI,
+  dialogueAPI
 }; 

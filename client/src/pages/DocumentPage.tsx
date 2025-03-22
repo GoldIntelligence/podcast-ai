@@ -688,14 +688,6 @@ const DocumentPage: React.FC = () => {
             >
               {generating ? '生成中...' : '生成对话稿'}
             </Button>
-            
-            <Button
-              icon={<FolderOpenOutlined />}
-              onClick={showLoadModal}
-              disabled={savedDialogues.length === 0 && savedBriefings.length === 0}
-            >
-              加载已保存稿件
-            </Button>
           </Space>
         </div>
       </Card>

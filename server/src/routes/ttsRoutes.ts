@@ -108,6 +108,7 @@ const processTTS = async (
 ) => {
   try {
     console.log(`开始处理TTS任务: ${taskId}`);
+    console.log(`对话内容: ${script.content}`);
     console.log(`对话内容: ${script.content.length}段`);
     
     // 初始化OpenAI API客户端

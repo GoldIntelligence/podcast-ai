@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
-import { Layout, Menu, Typography, Button, Avatar, Dropdown, Space } from 'antd';
+import { Layout, Menu, Typography, Avatar, Dropdown, Space } from 'antd';
 import {
   FileTextOutlined,
   SoundOutlined,
@@ -28,9 +28,50 @@ import './App.css';
 const { Header, Content, Footer, Sider } = Layout;
 const { Title } = Typography;
 
-// 导航菜单组件
-const NavigationMenu: React.FC = () => {
+// 菜单项配置
+const menuItems = [
+  {
+    key: 'document',
+    icon: <FileTextOutlined />,
+    label: '文档处理',
+    path: '/',
+    element: <DocumentPage />
+  },
+  {
+    key: 'saved-scripts',
+    icon: <SaveOutlined />,
+    label: '已保存稿件',
+    path: '/saved-scripts',
+    element: <SavedScripts />
+  },
+  {
+    key: 'voice',
+    icon: <SoundOutlined />,
+    label: '音色克隆',
+    path: '/voice',
+    element: <VoicePage />
+  },
+  {
+    key: 'tts',
+    icon: <CustomerServiceOutlined />,
+    label: '播客合成',
+    path: '/tts',
+    element: <TTSPage />
+  },
+  {
+    key: 'download',
+    icon: <DownloadOutlined />,
+    label: '下载中心',
+    path: '/download',
+    element: <DownloadPage />
+  }
+];
+
+// 用户菜单组件
+const UserMenu: React.FC = () => {
   const { user, logout } = useAuth();
+  
+  if (!user) return null;
   
   const userMenu = (
     <Menu>
@@ -41,18 +82,30 @@ const NavigationMenu: React.FC = () => {
   );
 
   return (
+    <Dropdown overlay={userMenu}>
+      <Space>
+        <Avatar icon={<UserOutlined />} />
+        <span>{user.username}</span>
+      </Space>
+    </Dropdown>
+  );
+};
+
+// 导航菜单组件
+const NavigationMenu: React.FC = () => {
+  return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Header style={{ background: '#fff', padding: '0 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <Header style={{ 
+        background: '#fff', 
+        padding: '0 20px', 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center' 
+      }}>
         <Title level={3} style={{ margin: '16px 0' }}>播客生成系统</Title>
-        {user && (
-          <Dropdown overlay={userMenu}>
-            <Space>
-              <Avatar icon={<UserOutlined />} />
-              <span>{user.username}</span>
-            </Space>
-          </Dropdown>
-        )}
+        <UserMenu />
       </Header>
+      
       <Layout>
         <Sider width={200} style={{ background: '#fff' }}>
           <Menu
@@ -60,23 +113,14 @@ const NavigationMenu: React.FC = () => {
             defaultSelectedKeys={['document']}
             style={{ height: '100%', borderRight: 0 }}
           >
-            <Menu.Item key="document" icon={<FileTextOutlined />}>
-              <Link to="/">文档处理</Link>
-            </Menu.Item>
-            <Menu.Item key="saved-scripts" icon={<SaveOutlined />}>
-              <Link to="/saved-scripts">已保存稿件</Link>
-            </Menu.Item>
-            <Menu.Item key="voice" icon={<SoundOutlined />}>
-              <Link to="/voice">音色克隆</Link>
-            </Menu.Item>
-            <Menu.Item key="tts" icon={<CustomerServiceOutlined />}>
-              <Link to="/tts">播客合成</Link>
-            </Menu.Item>
-            <Menu.Item key="download" icon={<DownloadOutlined />}>
-              <Link to="/download">下载中心</Link>
-            </Menu.Item>
+            {menuItems.map(item => (
+              <Menu.Item key={item.key} icon={item.icon}>
+                <Link to={item.path}>{item.label}</Link>
+              </Menu.Item>
+            ))}
           </Menu>
         </Sider>
+        
         <Layout style={{ padding: '24px' }}>
           <Content
             style={{
@@ -88,14 +132,13 @@ const NavigationMenu: React.FC = () => {
           >
             <Routes>
               <Route element={<ProtectedRoute />}>
-                <Route path="/" element={<DocumentPage />} />
-                <Route path="/saved-scripts" element={<SavedScripts />} />
-                <Route path="/voice" element={<VoicePage />} />
-                <Route path="/tts" element={<TTSPage />} />
-                <Route path="/download" element={<DownloadPage />} />
+                {menuItems.map(item => (
+                  <Route key={item.key} path={item.path} element={item.element} />
+                ))}
               </Route>
             </Routes>
           </Content>
+          
           <Footer style={{ textAlign: 'center' }}>
             播客生成系统 ©{new Date().getFullYear()} 版权所有
           </Footer>
@@ -105,6 +148,7 @@ const NavigationMenu: React.FC = () => {
   );
 };
 
+// 主应用组件
 const App: React.FC = () => {
   return (
     <AuthProvider>

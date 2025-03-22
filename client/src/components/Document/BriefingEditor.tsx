@@ -167,7 +167,7 @@ ${briefing.expert_opinion ? `专家观点：\n${briefing.expert_opinion}` : ''}
     setTtsProgress(0);
     
     try {
-      console.log(briefing);
+      console.log(`briefing`);
       // 构建语音文本
       const script = `
 今日简讯：${briefing.title}
