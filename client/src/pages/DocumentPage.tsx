@@ -302,6 +302,7 @@ const DocumentPage: React.FC = () => {
       
       console.log('收到对话稿数据:', dialogue);
       setDialogue(dialogue);
+      setCurrentType('dialogue');
       message.success('对话稿生成成功！');
     } catch (error) {
       console.error('生成对话稿失败:', error);

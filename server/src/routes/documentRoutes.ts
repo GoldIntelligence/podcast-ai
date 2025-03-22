@@ -120,17 +120,14 @@ router.post('/summarize', async (req, res) => {
       // 获取标题
       let title = parsedResponse.title || '财经对话';
       
-      // 生成时间戳
-      const currentTime = new Date();
-      const formattedTime = `${currentTime.getFullYear()}-${currentTime.getMonth() + 1}-${currentTime.getDate()} ${currentTime.getHours()}:${currentTime.getMinutes()}`;
-      
       // 构建最终的对话结构
       dialogue = {
-        title: `${title} ${formattedTime}`,
+        title: `${title}`,
         speakers: ['郎咸平', '李大霄'],
         content: parsedResponse.content || [],
         createdAt: new Date().toISOString()
       };
+      console.log('dialogue', dialogue);
       
       // 如果内容为空，添加默认内容
       if (!parsedResponse.content || parsedResponse.content.length === 0) {
@@ -167,11 +164,6 @@ router.post('/summarize', async (req, res) => {
           text: responseContent || '无法生成有效内容'
         });
       }
-      
-      // 生成标题和时间
-      const currentTime = new Date();
-      const formattedTime = `${currentTime.getFullYear()}-${currentTime.getMonth() + 1}-${currentTime.getDate()} ${currentTime.getHours()}:${currentTime.getMinutes()}`;
-      
       // 从内容中提取可能的标题
       let title = '财经对话';
       const firstLine = dialogueLines[0];
@@ -180,7 +172,7 @@ router.post('/summarize', async (req, res) => {
       }
       
       dialogue = {
-        title: `${title} ${formattedTime}`,
+        title: `${title}`,
         speakers: ['郎咸平', '李大霄'],
         content: dialogueContent,
         createdAt: new Date().toISOString()
@@ -257,13 +249,9 @@ router.post('/briefing', async (req, res) => {
       let market_impact = parsedResponse.market_impact || '';
       let expert_opinion = parsedResponse.expert_opinion || '';
       
-      // 生成时间戳
-      const currentTime = new Date();
-      const formattedTime = `${currentTime.getFullYear()}-${currentTime.getMonth() + 1}-${currentTime.getDate()} ${currentTime.getHours()}:${currentTime.getMinutes()}`;
-      
       // 构建最终的简报结构
       briefing = {
-        title: `${title} ${formattedTime}`,
+        title: `${title}`,
         summary: summary,
         key_points: key_points,
         market_impact: market_impact,
